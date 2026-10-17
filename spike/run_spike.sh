@@ -172,8 +172,10 @@ if [ "${INSTALL_FOR_APPLAB:-}" = "1" ]; then
   FILES=("$MODEL_FILE")
   [ "$VISION" = "1" ] && FILES+=("$MMPROJ_FILE")
   # App Lab's models folder sits on the small root disk: moving a 3-4 GB model there can fill it up.
+  # (A move within the same disk needs no extra room.)
   NEED_MB=$(( $(du -mL "${FILES[@]}" | awk '{s += $1} END {print s}') + 500 ))
   ROOM_MB=$(df -Pm "$(dirname "$DEST")" 2>/dev/null | awk 'NR==2 {print $4}' || echo 0)
+  if [ "$(stat -c %d .)" = "$(stat -c %d "$(dirname "$DEST")" 2>/dev/null)" ]; then NEED_MB=0; fi
   if [ "$ROOM_MB" -lt "$NEED_MB" ]; then
     echo "Not enough room in $(dirname "$DEST"): ${ROOM_MB} MB free, ${NEED_MB} MB needed. Nothing was moved."
     echo "Run Gemma 4 as our own server instead (no copying): bash spike/serve_gemma.sh"

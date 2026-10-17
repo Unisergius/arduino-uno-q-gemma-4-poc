@@ -59,9 +59,10 @@ export LD_LIBRARY_PATH="$WORK/pkg-cpu/lib"
 # --host 0.0.0.0: App Lab's app container reaches the board through the Docker gateway (anyone on the
 #   same Wi-Fi can reach it too, so stop it when you're done).
 # -np 1: one conversation slot, so the unchanged start of each prompt is reused instead of read again.
-nohup "$WORK/pkg-cpu/bin/llama-server" -m "$MODEL_FILE" "${VISION_ARGS[@]}" --alias "$NAME" \
+# setsid + nohup + </dev/null: it keeps running after the terminal, ssh or `adb shell` that started it closes.
+setsid nohup "$WORK/pkg-cpu/bin/llama-server" -m "$MODEL_FILE" "${VISION_ARGS[@]}" --alias "$NAME" \
   -c 4096 -np 1 -t "$THREADS" --host 0.0.0.0 --port "$PORT" \
-  --reasoning off --reasoning-budget 0 > "$LOG" 2>&1 &
+  --reasoning off --reasoning-budget 0 > "$LOG" 2>&1 < /dev/null &
 echo $! > "$PID_FILE"
 echo "Starting Gemma 4: $NAME$([ ${#VISION_ARGS[@]} -gt 0 ] && echo " + photos ($(basename "$MMPROJ"))") on port $PORT. Log: $LOG"
 for _ in $(seq 1 180); do
