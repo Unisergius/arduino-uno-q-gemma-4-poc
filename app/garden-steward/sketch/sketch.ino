@@ -37,6 +37,10 @@ const long TIME_SCALE = 60;
 const int ZONES = 2;  // one pump/relay; in a real garden each zone would get a valve
 
 Arduino_LED_Matrix matrix;
+// What the matrix shows (see "LED matrix" below). Declared up here because the Arduino
+// builder puts its function prototypes before the first function.
+enum Mode { IDLE, THINK, OK, ALERT };
+enum Flash { NO_FLASH, ACK, NOPE };
 
 // Simulated battery and tank, sent by Python. On a real garden these would be read
 // from a battery monitor and a float switch instead.
@@ -49,43 +53,110 @@ int historyCount[ZONES + 1] = {0};
 
 int pumpZone = 0;                // 0 = pump off
 unsigned long pumpOffAt = 0;
-unsigned long lastAnim = 0;
-bool animFrame = false;
 
 // Button presses are counted here; Python notices when the count goes up.
 long buttonPresses = 0;
 bool buttonWasDown = false;
 unsigned long buttonChangedAt = 0;
 
-uint8_t frame[8 * 13];
-
 long simMinutes() {
   return (long)(millis() / 1000UL) * TIME_SCALE / 60;
 }
 
-// ---------------------------------------------------------------- LED matrix icons
+// ---------------------------------------------------------------- LED matrix
+// What the 8 x 13 matrix shows, most important first:
+//   drops falling           the pump is on
+//   a ripple / a blinking X  the yellow button was taken / ignored because Gemma is busy
+//   a spinning circle        Gemma is thinking (Python says "think")
+//   a check mark / a "!"     the result ("ok" / "alert"), for RESULT_MS
+//   a pause sign             idle
+// Every frame is drawn here, so the Bridge only carries the changes of state.
 
-void px(int row, int col) { frame[row * 13 + col] = 7; }
+const unsigned long RESULT_MS = 6000;       // then back to the pause sign
+const unsigned long FLASH_MS = 600;
+const unsigned long BUTTON_WAIT_MS = 5000;  // the button starts the circle; Python confirms within ~1 s
 
-void drawIcon(const String& name, bool alt = false) {
+Mode mode = IDLE;
+Flash flash = NO_FLASH;
+unsigned long modeSince = 0, flashSince = 0, lastFrame = 0;
+bool thinkFromButton = false;  // the circle was started by the button, not yet by Python
+int step = 0;                  // animation frame counter
+
+// The loading circle, clockwise from the top.
+const int RING[][2] = {{0, 6}, {0, 7}, {1, 8}, {2, 9}, {3, 9}, {4, 9}, {5, 9}, {6, 8}, {7, 7},
+                       {7, 6}, {7, 5}, {6, 4}, {5, 3}, {4, 3}, {3, 3}, {2, 3}, {1, 4}, {0, 5}};
+const int RING_N = sizeof(RING) / sizeof(RING[0]);
+// The check mark, in drawing order.
+const int CHECK[][2] = {{4, 2}, {5, 3}, {6, 4}, {7, 5}, {6, 6}, {5, 7}, {4, 8}, {3, 9}, {2, 10}, {1, 11}};
+const int CHECK_N = sizeof(CHECK) / sizeof(CHECK[0]);
+
+uint8_t frame[8 * 13];
+
+void px(int row, int col, uint8_t level = 7) {  // level 0-7 (3-bit grayscale)
+  if (row >= 0 && row < 8 && col >= 0 && col < 13) frame[row * 13 + col] = level;
+}
+
+void drawFrame(unsigned long now) {
   memset(frame, 0, sizeof(frame));
-  if (name == "think") {                       // three dots
-    for (int c : {3, 6, 9}) { px(3, c); px(4, c); }
-  } else if (name == "water") {                // a drop, bouncing one row
-    int o = alt ? 1 : 0;
-    px(0 + o, 6); px(1 + o, 6);
-    for (int c = 5; c <= 7; c++) px(2 + o, c);
-    for (int r = 3; r <= 5; r++) for (int c = 4; c <= 8; c++) px(r + o, c);
-    for (int c = 5; c <= 7; c++) px(6 + o, c);
-  } else if (name == "alert") {                // exclamation mark
-    for (int r = 0; r <= 4; r++) px(r, 6);
-    px(6, 6); px(7, 6);
-  } else {                                     // "ok": a check mark
-    px(1, 11); px(2, 10); px(3, 9); px(4, 8); px(5, 7); px(6, 6); px(7, 5);
-    px(4, 2); px(5, 3); px(6, 4);
+  if (pumpZone) {                                // three drops falling onto the soil
+    const int cols[] = {2, 6, 10}, offsets[] = {0, 5, 2};
+    for (int j = 0; j < 3; j++) {
+      int y = (step + offsets[j]) % 8 - 1;
+      px(y, cols[j], 3);
+      px(y + 1, cols[j], 7);
+    }
+    for (int c = 1; c <= 11; c++) px(7, c, 2);
+  } else if (flash == ACK) {                     // a ripple from the middle: "got it"
+    float r = (now - flashSince) / 90.0;
+    for (int row = 0; row < 8; row++)
+      for (int col = 0; col < 13; col++) {
+        float d = sqrt((col - 6) * (col - 6) + (row - 3.5) * (row - 3.5));
+        if (fabs(d - r) < 0.7) px(row, col, 7);
+      }
+  } else if (flash == NOPE) {                    // a blinking X: "busy, not now"
+    if ((now - flashSince) / 100 % 2 == 0)
+      for (int i = 0; i <= 6; i++) { px(i, 3 + i); px(i, 9 - i); }
+  } else if (mode == THINK) {                    // a faint track with a bright head and fading tail
+    for (int i = 0; i < RING_N; i++) px(RING[i][0], RING[i][1], 1);
+    for (int t = 0; t < 6; t++) {
+      int i = ((step - t) % RING_N + RING_N) % RING_N;
+      px(RING[i][0], RING[i][1], 7 - t);
+    }
+  } else if (mode == OK) {                       // the check mark draws itself
+    for (int i = 0; i <= step && i < CHECK_N; i++) px(CHECK[i][0], CHECK[i][1]);
+  } else if (mode == ALERT) {                    // a blinking exclamation mark
+    if (step % 2 == 0) {
+      for (int r = 0; r <= 4; r++) px(r, 6);
+      px(6, 6); px(7, 6);
+    }
+  } else {                                       // IDLE: a calm pause sign
+    for (int r = 1; r <= 6; r++) { px(r, 4, 3); px(r, 5, 3); px(r, 7, 3); px(r, 8, 3); }
   }
   matrix.draw(frame);
-  digitalWrite(PIN_LED_ALERT, name == "alert" ? HIGH : LOW);
+}
+
+unsigned long framePeriod() {
+  if (pumpZone) return 90;
+  if (flash != NO_FLASH) return 30;
+  if (mode == THINK || mode == OK) return 60;
+  if (mode == ALERT) return 350;
+  return 1000;
+}
+
+void setMode(Mode m) {
+  if (m == THINK && mode == THINK) return;  // keep the circle turning smoothly
+  mode = m;
+  modeSince = millis();
+  step = 0;
+  if (m == ALERT) digitalWrite(PIN_LED_ALERT, HIGH);  // the red LED keeps the alert until a good result
+  if (m == OK) digitalWrite(PIN_LED_ALERT, LOW);
+  drawFrame(modeSince);
+}
+
+void startFlash(Flash f) {
+  flash = f;
+  flashSince = millis();
+  drawFrame(flashSince);
 }
 
 // ---------------------------------------------------------------- pump
@@ -98,7 +169,9 @@ void pumpWrite(bool on) {
 void stopPump() {
   pumpWrite(false);
   pumpZone = 0;
-  drawIcon("ok");
+  modeSince = millis();  // the result shows its full time after the drops
+  step = 0;
+  drawFrame(modeSince);
 }
 
 // ---------------------------------------------------------------- functions Python can call
@@ -140,7 +213,8 @@ String water(int zone, int seconds) {
   pumpZone = zone;
   pumpOffAt = millis() + (unsigned long)seconds * 1000UL;
   pumpWrite(true);
-  drawIcon("water");
+  step = 0;
+  drawFrame(millis());
   return reply(true, zone, seconds, note);
 }
 
@@ -163,8 +237,14 @@ bool set_sim_state(int newBattery, bool newTankEmpty) {
   return true;
 }
 
+// "think", "ok", "alert", "idle", or "nope" (a quick X: Python is too busy for that request).
 bool show(String icon) {
-  if (!pumpZone) drawIcon(icon);   // while watering, the drops win
+  if (icon == "nope") {
+    startFlash(NOPE);
+    return true;
+  }
+  thinkFromButton = false;
+  setMode(icon == "think" ? THINK : icon == "ok" ? OK : icon == "alert" ? ALERT : IDLE);
   return true;
 }
 
@@ -179,7 +259,7 @@ void setup() {
 
   matrix.begin();
   matrix.setGrayscaleBits(3);
-  drawIcon("ok");
+  setMode(IDLE);
 
   Bridge.begin();
   // provide_safe: these run in the main loop thread, so they can safely touch pins and the matrix.
@@ -194,17 +274,36 @@ void loop() {
   unsigned long now = millis();
 
   if (pumpZone && (long)(now - pumpOffAt) >= 0) stopPump();
-  if (pumpZone && now - lastAnim > 400) {
-    lastAnim = now;
-    animFrame = !animFrame;
-    drawIcon("water", animFrame);
-  }
 
-  // Count button presses (with 50 ms debounce).
+  // Count button presses (with 50 ms debounce). While Gemma is thinking a press is
+  // ignored - a check takes minutes - and the X says so straight away.
   bool down = digitalRead(PIN_BUTTON) == BUTTON_PRESSED;
   if (down != buttonWasDown && now - buttonChangedAt > 50) {
     buttonChangedAt = now;
     buttonWasDown = down;
-    if (down) buttonPresses++;
+    if (down && mode == THINK) {
+      startFlash(NOPE);
+    } else if (down) {
+      buttonPresses++;
+      setMode(THINK);
+      thinkFromButton = true;
+      startFlash(ACK);
+    }
+  }
+
+  // The matrix.
+  if (flash != NO_FLASH && now - flashSince > FLASH_MS) {
+    flash = NO_FLASH;
+    drawFrame(now);
+  }
+  if (thinkFromButton && now - modeSince > BUTTON_WAIT_MS) {  // Python never answered (app not running?)
+    thinkFromButton = false;
+    setMode(IDLE);
+  }
+  if ((mode == OK || mode == ALERT) && !pumpZone && now - modeSince > RESULT_MS) setMode(IDLE);
+  if (now - lastFrame >= framePeriod()) {
+    lastFrame = now;
+    step++;
+    drawFrame(now);
   }
 }

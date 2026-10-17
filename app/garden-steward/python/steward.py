@@ -98,6 +98,7 @@ class Steward:
                 getattr(self, f"_job_{kind}")(payload)
             except Exception as error:
                 self._write_log("error", job=kind, error=str(error))
+                self._show("alert")  # don't leave the matrix spinning
             finally:
                 self.busy = None
 
@@ -108,8 +109,10 @@ class Steward:
 
     def _enqueue(self, kind):
         """Queue a Gemma job unless the same one is already waiting: on the board each takes minutes."""
-        if kind not in self._waiting():
-            self.jobs.put((kind, None))
+        if kind in self._waiting():
+            return False
+        self.jobs.put((kind, None))
+        return True
 
     # --- Gemma jobs --------------------------------------------------------------------
 
@@ -154,11 +157,14 @@ class Steward:
         self._show("ok" if not outcome or outcome["ok"] else "alert")
 
     def check_now(self):
-        if self.busy == "snap" or "snap" in self._waiting():
-            return  # already looking at the photo; pressing again would only queue minutes of work
+        """The yellow button or "Check now": a photo, then a decision - unless Gemma is already busy."""
+        if self.busy or self._waiting():
+            self._mcu("show", "nope")  # a quick X on the matrix; the sketch also ignores button presses then
+            return False
         self.last_decision_h = self.clock.hours()
         self.jobs.put(("snap", None))
-        self._enqueue("decide")
+        self.jobs.put(("decide", None))
+        return True
 
     def _job_snap(self, _):
         """Grab a frame from the reCamera - or, with no camera, use the test drawing picked on the web page."""
@@ -311,7 +317,9 @@ class Steward:
             return {"ok": True}
         if kind == "decide":
             self.last_decision_h = self.clock.hours()
-            self._enqueue("decide")
+            if not self._enqueue("decide"):
+                self._mcu("show", "nope")
+                return {"ok": False, "error": "Gemma is already going to decide"}
         elif kind == "ask":
             self.jobs.put(("ask", str(action["question"])[:300]))
         elif kind == "photo":
@@ -319,7 +327,8 @@ class Steward:
         elif kind == "journal":
             self._enqueue("journal")
         elif kind == "check":  # same as the yellow button
-            self.check_now()
+            if not self.check_now():
+                return {"ok": False, "error": "Gemma is busy - try again when it's done"}
         elif kind == "water":  # the "try to overwater it" button: straight to the MCU, no Gemma
             outcome = self._act(int(action["zone"]), int(action["seconds"]))
             self._write_log("manual", zone=int(action["zone"]), seconds=int(action["seconds"]), mcu=outcome)

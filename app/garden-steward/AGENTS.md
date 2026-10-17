@@ -15,7 +15,7 @@ memory ~3.1 GB with the 0.99 GB photo part. Don't move the model onto `/`.
 ## Files
 - `sketch/sketch.ino`: MCU side. Reads the DFRobot Gravity sensors, drives the relay "pump", the LEDs and the
   LED matrix, and **enforces the safety limits**. Functions exposed over the Bridge: `water`,
-  `read_sensors`, `set_sim_state`, `show`.
+  `read_sensors`, `set_sim_state`, `show` ("think", "ok", "alert", "idle" or "nope"; the sketch animates them).
 - `python/main.py`: entry point on the board (WebUI on port 7000, `Bridge`, `App.run`).
 - `python/steward.py`: the loop (garden clock, Gemma jobs on a worker thread, log, web API).
 - `python/brain.py`: Gemma's three jobs (Decide / See / Explain) via llama.cpp's OpenAI-style API with

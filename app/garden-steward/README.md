@@ -159,6 +159,18 @@ Before you start, press **⏸ Pause automatic decisions**: each Gemma answer tak
    sick leaves **yellow/brown** (a highlighter or marker; blue pen alone won't do).
 6. **Ask** "How's the lettuce doing?" Gemma answers from the log.
 
+**What the board's LED matrix shows** (so the audience can see Gemma working while it thinks for minutes):
+
+| Matrix | Meaning |
+|---|---|
+| a spinning circle | Gemma is thinking (looking at a photo, deciding, answering) |
+| a ripple from the middle | the yellow button was taken: a photo check and a decision are on their way |
+| a quick blinking ✕ | the yellow button (or **Check now**) was ignored: Gemma is still busy |
+| drops falling | the pump is on (the blue LED too) |
+| a check mark drawing itself | done, all fine (for 6 s) |
+| a blinking "!" | done, something needs attention (for 6 s; the red LED stays on until a good result) |
+| a pause sign | idle, waiting for the next decision or a button press |
+
 ## 6. How Gemma is used (short version)
 
 - **Decide:** Python turns readings into a short report and does the comparisons itself ("soil 20 % =
