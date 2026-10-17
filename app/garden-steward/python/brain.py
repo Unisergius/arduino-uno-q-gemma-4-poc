@@ -21,7 +21,8 @@ Every few hours you get a short report. For EACH zone choose one action:
 Rules of thumb:
 - Keep the soil inside the target range. Water when it is below or about to drop below it.
 - Never water a zone that is inside or above its range and not falling fast.
-- If rain is likely (pressure down 3 hPa or more in 3 hours), skip or shorten watering.
+- If rain is likely (pressure down 3 hPa or more in 3 hours), wait and let the rain water the garden,
+  unless the soil is more than 10 points below its target range.
 - If the water tank is empty or the battery is very low, use alert instead of water.
 Write the reason first: one plain sentence, at most 20 words."""
 
@@ -102,9 +103,18 @@ class LlmClient:
             ]
         body = {
             "model": self.model,
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": content}],
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": content},
+                # An empty assistant turn makes llama.cpp close Gemma's "thought" channel before it
+                # starts. Together with a thinking budget of 0, Gemma answers straight away instead
+                # of thinking out loud - which would cost minutes on the board. (Tested: 0 of 12
+                # replies thought with both; 6 of 12 did without the budget.)
+                {"role": "assistant", "content": ""},
+            ],
             "temperature": 0.2,
             "max_tokens": max_tokens,
+            "reasoning_budget_tokens": 0,
         }
         if schema:
             body["response_format"] = {"type": "json_schema", "json_schema": {"name": "reply", "schema": schema}}

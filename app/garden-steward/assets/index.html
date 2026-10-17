@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Garden Steward</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1><span id="icon">✅</span> Garden Steward</h1>
+    <div class="meta"><span id="time">…</span> · <span id="busy">Gemma idle</span></div>
+  </header>
+
+  <main>
+    <section id="zones" class="cards"></section>
+
+    <section class="card">
+      <h2>Weather &amp; power</h2>
+      <div id="weather" class="chips"></div>
+    </section>
+
+    <section class="card">
+      <h2>Make something happen</h2>
+      <div class="buttons">
+        <button data-action='{"type":"scenario","value":"normal"}'>☀️ Normal</button>
+        <button data-action='{"type":"scenario","value":"heatwave"}'>🔥 Heatwave</button>
+        <button data-action='{"type":"scenario","value":"rain_coming"}'>🌧️ Rain coming</button>
+      </div>
+      <div class="buttons">
+        <button data-action='{"type":"dry","zone":1}'>🏜️ Dry zone 1</button>
+        <button data-action='{"type":"dry","zone":2}'>🏜️ Dry zone 2</button>
+        <button data-action='{"type":"battery","value":15}'>🪫 Low battery</button>
+        <button data-action='{"type":"battery","value":90}'>🔋 Full battery</button>
+        <button data-action='{"type":"tank","empty":true}'>🚱 Empty tank</button>
+        <button data-action='{"type":"tank","empty":false}'>🚰 Refill tank</button>
+      </div>
+      <div class="buttons">
+        <button class="primary" data-action='{"type":"decide"}'>🧠 Ask Gemma to decide now</button>
+        <button class="danger" data-action='{"type":"water","zone":1,"seconds":600}'>💦 Force: water zone 1 for 10 min</button>
+        <button data-action='{"type":"journal"}'>📓 Write journal</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Ask the garden</h2>
+      <form id="ask-form" class="row">
+        <input id="question" placeholder="How is the lettuce doing?" autocomplete="off">
+        <button class="primary">Ask</button>
+      </form>
+      <p id="answer" class="muted">Gemma answers here. It can take a minute on the board.</p>
+    </section>
+
+    <section class="card">
+      <h2>Check the plants (photo)</h2>
+      <label class="upload">📷 Take or choose a photo of the (paper) garden
+        <input id="photo" type="file" accept="image/*" capture="environment">
+      </label>
+      <p id="photo-result" class="muted">Gemma looks at the picture and says if the plants look healthy.</p>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <ul id="log"></ul>
+      <details>
+        <summary>What Gemma read last time</summary>
+        <pre id="prompt">(nothing yet)</pre>
+      </details>
+    </section>
+  </main>
+
+  <footer id="gemma" class="muted"></footer>
+  <script src="app.js"></script>
+</body>
+</html>
