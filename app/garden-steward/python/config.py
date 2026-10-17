@@ -59,6 +59,11 @@ TIME_SCALE = 60
 # The web page can pause automatic decisions (for a live demo: decide only when you press a button).
 DECIDE_EVERY_H = 4
 AUTO_DECIDE = os.getenv("AUTO_DECIDE", "1") != "0"
+# The first automatic decision waits this long after the app starts (2 real minutes): time to pause
+# automatic decisions or tick the wired sensors before Gemma looks at the garden.
+FIRST_DECISION_H = 2
+# The LED matrix shows a result this long, then a pause sign (sketch.ino: RESULT_MS).
+RESULT_S = 6
 # Below this soil moisture (%) Gemma is asked right away, and the fallback rule waters.
 URGENT_SOIL = 25
 FALLBACK_WATER_S = 20

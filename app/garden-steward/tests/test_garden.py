@@ -254,6 +254,7 @@ def test_decision_waters_through_the_mcu_and_logs_the_reason(tmp_path):
         {"zone": 2, "reason": "Lettuce is fine.", "action": "wait", "seconds": 0},
     ]}
     steward, llm, _ = steward_with(reply, tmp_path)
+    steward.first_auto_h = 0  # as if the app had been running for a while
     steward.garden.dry_out(1)
     steward.tick()
     kind, payload = steward.jobs.get_nowait()
@@ -324,13 +325,38 @@ def test_forced_overwatering_is_refused_the_second_time(tmp_path):
 def test_decisions_are_scheduled_every_few_sim_hours(tmp_path):
     steward, _, fake = steward_with({}, tmp_path)
     steward.tick()
+    assert steward.jobs.empty(), "time to pause or wire sensors before the first decision"
+    first = config.FIRST_DECISION_H
+    fake.t = 60 * first
+    steward.tick()
     assert steward.jobs.get_nowait()[0] == "decide"
-    fake.t = 60 * (config.DECIDE_EVERY_H - 1)  # 1 h early: not due yet
+    fake.t = 60 * (first + config.DECIDE_EVERY_H - 1)  # 1 h early: not due yet
     steward.tick()
     assert steward.jobs.empty()
-    fake.t = 60 * config.DECIDE_EVERY_H  # due
+    fake.t = 60 * (first + config.DECIDE_EVERY_H)  # due
     steward.tick()
     assert steward.jobs.get_nowait()[0] == "decide"
+
+
+def test_a_sick_plant_stays_flagged_until_a_healthy_photo(tmp_path):
+    reply = {"decisions": [{"zone": 1, "reason": "ok", "action": "wait", "seconds": 0},
+                           {"zone": 2, "reason": "ok", "action": "wait", "seconds": 0}]}
+    steward, _, _ = steward_with(reply, tmp_path)
+    steward.tick()
+    steward.photo = {"status": "sick"}
+    steward._job_decide(None)
+    assert steward.mcu.icon == "alert"  # the red LED stays on
+    steward.photo = {"status": "healthy"}
+    steward._job_decide(None)
+    assert steward.mcu.icon == "ok"
+
+
+def test_the_page_shows_idle_after_the_result(tmp_path, monkeypatch):
+    steward, _, _ = steward_with({}, tmp_path)
+    steward._show("ok")
+    assert steward.state()["icon"] == "ok"
+    monkeypatch.setattr(steward, "icon_since", time.monotonic() - config.RESULT_S - 1)
+    assert steward.state()["icon"] == "idle"
 
 
 class SensorMcu(FakeMcu):

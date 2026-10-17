@@ -1,6 +1,6 @@
 // Garden Steward web page: polls /api/state every 2 s and sends button presses to /api/action.
 
-const ICONS = { ok: "✅", think: "💭", water: "💧", alert: "⚠️" };
+const ICONS = { ok: "✅", think: "💭", water: "💧", alert: "⚠️", idle: "⏸️" };
 const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", snap: "Gemma is looking at the photo…", journal: "Gemma is writing the journal…" };
 const JOBS = { decide: "deciding", ask: "answering", photo: "the photo check", snap: "taking the photo", journal: "the journal" };
 const $ = (id) => document.getElementById(id);

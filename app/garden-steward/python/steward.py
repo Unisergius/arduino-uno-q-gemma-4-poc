@@ -34,6 +34,7 @@ class Steward:
         self.busy = None
         self.busy_since = 0.0
         self.icon = "ok"
+        self.icon_since = time.monotonic()
         self.pump_until = 0.0
         self.answer = None
         self.photo = None
@@ -45,6 +46,7 @@ class Steward:
         self.sent_state = None
         self.last_tick_h = self.clock.hours()
         self.last_decision_h = None
+        self.first_auto_h = self.clock.hours() + config.FIRST_DECISION_H
         self.last_journal_day = None
         self.ticks = 0
 
@@ -76,7 +78,7 @@ class Steward:
         if presses is not None:
             self.last_button = presses
 
-        if self.auto_decide and self.busy is None and self.jobs.empty():
+        if self.auto_decide and self.busy is None and self.jobs.empty() and now_h >= self.first_auto_h:
             since = None if self.last_decision_h is None else now_h - self.last_decision_h
             due = since is None or since >= config.DECIDE_EVERY_H
             urgent = min(snap["moisture"].values()) < config.URGENT_SOIL and (since is None or since >= 1)
@@ -212,7 +214,9 @@ class Steward:
             time.sleep(0.2)
 
     def _show(self, icon):
-        self.icon = icon
+        if icon == "ok" and (self.photo or {}).get("status") == "sick":
+            icon = "alert"  # a sick plant stays flagged (red LED) until a photo shows it healthy
+        self.icon, self.icon_since = icon, time.monotonic()
         self._mcu("show", icon)
 
     def _mcu(self, name, *args):
@@ -253,6 +257,8 @@ class Steward:
         with self.lock:
             snap = self.garden.snapshot(now, self.real)
         icon = "water" if time.monotonic() < self.pump_until else self.icon
+        if icon == "ok" and not self.busy and time.monotonic() - self.icon_since > config.RESULT_S:
+            icon = "idle"  # like the matrix: the check mark, then a pause sign
         return {
             "time": f"Day {(now - self.clock.start).days + 1} {now:%H:%M}",
             "garden": snap,
