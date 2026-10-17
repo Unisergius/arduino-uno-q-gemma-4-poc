@@ -2,6 +2,7 @@
 
 const ICONS = { ok: "✅", think: "💭", water: "💧", alert: "⚠️" };
 const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", snap: "Taking a photo…", journal: "Gemma is writing the journal…" };
+const JOBS = { decide: "deciding", ask: "answering", photo: "the photo check", snap: "taking the photo", journal: "the journal" };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -30,8 +31,9 @@ function mcuText(mcu) {
 }
 
 function logLine(e) {
-  const source = e.source || (e.kind === "manual" ? "manual" : "gemma");
-  const badge = `<span class="badge ${source.startsWith("gemma") ? "gemma" : "fallback"}">${esc(source)}</span>`;
+  const source = e.source || { manual: "manual", error: "problem" }[e.kind] || "gemma";
+  const style = source.startsWith("gemma") ? "gemma" : source === "problem" ? "refused" : "fallback";
+  const badge = `<span class="badge ${style}">${esc(source)}</span>`;
   let text;
   switch (e.kind) {
     case "decision":
@@ -50,7 +52,7 @@ function logLine(e) {
       text = `Forced: water zone ${e.zone} for ${e.seconds} s${mcuText(e.mcu)}`;
       break;
     default:
-      text = `Problem in ${esc(e.job)}: ${esc(e.error)}`;
+      text = `Problem with ${esc(JOBS[e.job] || e.job)}: ${esc(e.error)}`;
   }
   if (e.error && e.kind === "decision") text += ` <span class="small">(${esc(e.error)})</span>`;
   return `<li><span class="small">${esc(e.time)}</span> ${badge}${text}${timing(e.llm)}</li>`;
