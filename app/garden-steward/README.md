@@ -136,15 +136,18 @@ judged correctly every time (healthy 3/3, sick 3/3).
 
 ## 5. Demo script (for the presentation)
 
+No wiring needed; with sensors wired, the knob / wet fingertip / yellow button do the same as the buttons.
+Before you start, press **⏸ Pause automatic decisions**: each Gemma answer takes 1.5–3 minutes on the board.
+
 1. **Show** the paper garden (zone 1 tomatoes, zone 2 lettuce) and the web page on a phone.
-2. **Turn the zone 1 knob to dry** (and pinch the temperature sensor for a heatwave). Gemma decides to water.
-   The relay clicks, the blue LED and the matrix show water, and the log shows Gemma's reason.
-3. **Touch the steam sensor with a wet fingertip** (or press **Rain coming**). Gemma waits and says it is raining.
-4. **Try to overwater:** ask "water zone 1 for 10 minutes" (or press **Force**). The MCU clamps it to 60 s,
-   or refuses with "minimum is 4 h" if zone 1 was watered in the last 4 simulated hours. Either way, the MCU has the last word.
-5. **Sick plant:** pick the **sick** test drawing (or photograph your own paper drawing with the phone)
-   and press the **yellow button**. Gemma flags it. Tip: Gemma reads **colour** reliably, not drooping
-   shapes, so colour sick leaves **yellow/brown** (a highlighter or marker; blue pen alone won't do).
+2. **Press Dry zone 1** (and **Heatwave**), then **Ask Gemma to decide now**. Gemma decides to water: the
+   board's LED matrix shows drops and the log shows Gemma's reason.
+3. **Press Rain coming**, then ask Gemma again. It waits and says why.
+4. **Try to overwater:** press **Force: water zone 1 for 10 min**. The MCU cuts it to 60 s; press it again and
+   it refuses ("minimum is 4 h"). The MCU has the last word.
+5. **Sick plant:** pick the **sick** test drawing (or photograph your own paper drawing with the phone) and
+   press **Check now**. Gemma flags it. Tip: Gemma reads **colour** reliably, not drooping shapes, so colour
+   sick leaves **yellow/brown** (a highlighter or marker; blue pen alone won't do).
 6. **Ask** "How's the lettuce doing?" Gemma answers from the log.
 
 ## 6. How Gemma is used (short version)

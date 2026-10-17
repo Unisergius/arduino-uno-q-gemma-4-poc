@@ -128,12 +128,12 @@ No water and no plants needed. **The brain is real; only the garden is pretended
 
 ### Demo script (for the presentation)
 1. **Show the paper garden** (e.g. Zone 1 tomatoes, Zone 2 lettuce) and the web page on a phone.
-2. **Turn zone 1's soil knob down** (and pinch the temperature sensor for a heatwave). Gemma decides to
-   water. The relay clicks, the matrix shows drops and the log shows the reason.
-3. **Touch the rain sensor with a wet fingertip** (or press "Rain coming"). Gemma skips watering and says why.
-4. **Try to overwater it:** ask "water zone 1 for 10 minutes". The **MCU refuses** with a safety limit.
+2. **Press "Dry zone 1"** (and "Heatwave"), then "Ask Gemma to decide now". Gemma decides to water; the
+   board's LED matrix shows drops and the log shows the reason. (With sensors wired: turn the knob instead.)
+3. **Press "Rain coming"** and ask again (or a wet fingertip on the rain sensor). Gemma skips watering and says why.
+4. **Try to overwater it:** "Force: water zone 1 for 10 min". The **MCU cuts it to 60 s**; a second press is refused.
 5. **Sick plant:** pick the "sick" test drawing (or photograph a yellow/brown paper drawing with the phone)
-   and press the yellow button. Gemma flags it.
+   and press "Check now". Gemma flags it.
 6. **Ask a question:** "How's the lettuce doing?" Gemma answers from the log.
 
 ## 6. Power budget (real deployment – estimates, to be measured in Phase 0)
