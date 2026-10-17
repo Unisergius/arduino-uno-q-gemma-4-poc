@@ -15,7 +15,10 @@ board, how much memory it needs, and whether one real garden decision comes back
 
 ## Steps
 1. In App Lab, **stop any running app** (it frees memory).
-2. Open a terminal on the board (App Lab's terminal, or `ssh arduino@<board-ip>`).
+2. Open a terminal **on the board**, not on your computer (the script stops if you run it on a Mac or PC):
+   - App Lab's built-in terminal, or
+   - from your computer: `ssh arduino@<board-name>.local` (the password you chose in App Lab's setup), or
+   - over USB: `adb shell`.
 3. Get this repository onto the board, for example:
    ```bash
    git clone https://github.com/Unisergius/arduino-uno-q-gemma-4-poc.git

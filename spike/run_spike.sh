@@ -9,6 +9,21 @@
 #   MODEL_URL=<smaller .gguf> bash spike/run_spike.sh  # try a smaller file if memory is too tight
 set -euo pipefail
 
+# This downloads a llama.cpp built for the UNO Q's Linux (arm64): it cannot run on a Mac or a PC.
+if [ "$(uname -s)" != "Linux" ] || [ "$(uname -m)" != "aarch64" ]; then
+  echo "This test must run ON THE UNO Q, not on this computer ($(uname -s) $(uname -m))."
+  echo
+  echo "Open a terminal on the board first, one of:"
+  echo "  - App Lab's built-in terminal"
+  echo "  - from this computer: ssh arduino@<board-name>.local   (the password you chose in App Lab's setup)"
+  echo "  - over USB: adb shell"
+  echo
+  echo "Then, on the board:"
+  echo "  git clone https://github.com/Unisergius/arduino-uno-q-gemma-4-poc.git"
+  echo "  cd arduino-uno-q-gemma-4-poc && bash spike/run_spike.sh"
+  exit 1
+fi
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${WORK:-$HOME/gemma-spike}"
 THREADS="${THREADS:-4}"
@@ -35,7 +50,7 @@ if [ ! -x pkg-cpu/bin/llama-server ]; then
 fi
 export LD_LIBRARY_PATH="$WORK/pkg-cpu/lib"
 BIN="$WORK/pkg-cpu/bin"
-"$BIN/llama-server" --version || { echo "llama-server does not start. Try: sudo apt install libgomp1"; exit 1; }
+"$BIN/llama-server" --version || { echo "llama-server does not start. If the error above mentions libgomp: sudo apt install libgomp1"; exit 1; }
 
 step "2/5  Gemma 4 E2B ($MODEL_FILE) + vision part if VISION=1 - needs internet this one time"
 [ -f "$MODEL_FILE" ] || curl -L --fail -o "$MODEL_FILE" "$MODEL_URL"
