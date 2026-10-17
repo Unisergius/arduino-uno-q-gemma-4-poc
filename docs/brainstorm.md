@@ -1,5 +1,8 @@
 # Brainstorm: an off-grid smart app on Arduino UNO Q + Gemma 4
 
+> **Decision (Oct 2026):** Idea 1, the Garden Steward, on a 4 GB UNO Q. It is never online and runs
+> on solar + battery, with a "Paper Garden" simulation first. See [design.md](design.md).
+
 Goal: a small proof of concept that shows what the UNO Q can do when it is paired
 with Gemma 4, for a "smart" app that keeps working without mains power or a
 reliable internet connection.
