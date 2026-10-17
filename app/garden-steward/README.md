@@ -11,6 +11,8 @@ No internet is needed while it runs.
 
 ## 1. Wiring (DFRobot Gravity kit)
 
+![The 9 kit modules to use, with their pins and power](../../docs/images/kit-wiring.jpg)
+
 The UNO Q is **3.3 V logic**. **A0/A1 are not 5 V tolerant**, and the analog inputs top out around 3.3 V,
 so power those sensors from **3.3 V**. **Don't use D3.** Each Gravity module has 3 wires: signal, VCC (red), GND (black).
 

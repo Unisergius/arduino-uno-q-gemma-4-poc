@@ -152,6 +152,8 @@ plus a **30–50 W panel** and an MPPT charge controller.
 
 ### Wiring: your parts (DFRobot Gravity kit KIT0011)
 
+![The 9 kit modules to use, with their pins and power](images/kit-wiring.jpg)
+
 The UNO Q's pins are **3.3 V logic**. A0/A1 are **not** 5 V tolerant, analog inputs top out around 3.3 V, and D3 is avoided.
 Each Gravity module has 3 wires: **signal**, **VCC** (red), **GND** (black).
 
