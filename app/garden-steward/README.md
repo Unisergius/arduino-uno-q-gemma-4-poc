@@ -28,8 +28,32 @@ so power those sensors from **3.3 V**. **Don't use D3.** Each Gravity module has
 | D5 | Blue LED module (optional) | water flowing | 3.3 V |
 | D6 | Red LED module (optional) | alert | 3.3 V |
 
+### Connecting the kit's cables (breadboard + jumper wires)
+
+The kit's cables end in a black **female** 3-hole plug, and the UNO Q's pins are female too, so they don't
+fit together. The board also has only one 3.3 V pin and one 5 V pin for 9 modules. You need:
+- a **breadboard** (half size is fine), to share 3.3 V, 5 V and GND, and
+- **male-to-male jumper wires**: about 30 for all 9 modules, 16 for the 4 essential ones.
+
+```
+UNO Q 3.3V ──► breadboard rail A (+) ◄── red wires: knob, soil probe, light, rain, button, LEDs
+UNO Q GND  ──► breadboard rail A (−) ◄── black wires
+UNO Q 5V   ──► breadboard rail B (+) ◄── red wires: relay and temperature ONLY   (put tape on it: "5 V")
+UNO Q GND  ──► breadboard rail B (−) ◄── black wires
+Each module's green wire ──► its own pin on the UNO Q: A0, A1, A2, A3, A4, D2, D4, D5, D6
+```
+
+For each module: plug the white end into the module, push three jumpers into the holes of the black end,
+then take **green → its pin**, **red → a + rail**, **black → a − rail**. Check the colours against the
+little `+`, `−` and `A`/`D` marks printed next to the module's socket. **Before powering on**, check that
+nothing from the 5 V rail reaches A0–A5.
+
+**Short on jumpers?** Wire the four that carry the demo first: **knob (A0)**, **relay (D4)**,
+**yellow button (D2)** and **rain (A4)**. Then add temperature, soil probe, light and the LEDs.
+
 Not every module plugged in? Remove its name from `CONNECTED` in `python/sensors.py`, and the
-simulation fills in for it. Floating pins read random noise.
+simulation fills in for it. Unplugged analog pins read random noise. (An unplugged button is fine:
+the sketch holds D2 low.)
 
 **Calibrate** (2 minutes): open the web page, expand **"Raw sensor readings"**, and note the knob at both
 ends and the soil probe dry and in the damp tissue. Put those numbers in `python/config.py`

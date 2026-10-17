@@ -171,7 +171,7 @@ bool show(String icon) {
 // ---------------------------------------------------------------- setup / loop
 
 void setup() {
-  pinMode(PIN_BUTTON, INPUT);
+  pinMode(PIN_BUTTON, INPUT_PULLDOWN);  // reads "not pressed" even when no button is plugged in
   pinMode(PIN_RELAY, OUTPUT);
   pinMode(PIN_LED_WATER, OUTPUT);
   pinMode(PIN_LED_ALERT, OUTPUT);
