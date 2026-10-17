@@ -99,7 +99,7 @@ minutes), or sooner when a zone gets very dry.
    [`dist/garden-steward-applab.zip`](https://github.com/Unisergius/arduino-uno-q-gemma-4-poc/raw/main/dist/garden-steward-applab.zip)
    and use App Lab's **import** to add it (the zip has `garden-steward/app.yaml` at the top, the layout App Lab expects).
    Without import: create a new app and copy in `app.yaml`, `sketch/`, `python/` and `assets/` by hand.
-3. Press **Run**. App Lab compiles the sketch, starts the LLM brick, and starts the Python side.
+3. Press **Run**. App Lab compiles and flashes the sketch and starts the Python side, which finds Gemma by itself.
 4. On your phone (same Wi‑Fi), open `http://<UNO-Q-IP>:7000`.
 5. **Live demo tip:** one decision takes about 2–3 minutes on the board. Press **⏸ Pause automatic
    decisions** before presenting, so Gemma only thinks when you press a button, and talk while it thinks.
@@ -110,7 +110,7 @@ minutes), or sooner when a zone gets very dry.
 
 After changing files in this folder, rebuild the zip: `python3 tools/make_applab_zip.py` (a test checks it is up to date).
 
-The sketch compiles for the UNO Q (`arduino:zephyr:unoq`). It was tested with arduino-cli, but not yet on a board.
+The sketch compiles for the UNO Q (`arduino:zephyr:unoq`) and has run on a board (17 October 2026).
 
 ## 4. Test environment: a laptop, no board, no camera
 
