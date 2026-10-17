@@ -365,6 +365,37 @@ def test_yellow_button_takes_a_photo_and_decides(tmp_path):
     assert [steward.jobs.get_nowait()[0] for _ in range(2)] == ["snap", "decide"]
 
 
+def test_pressing_again_while_gemma_looks_queues_nothing_more(tmp_path):
+    clock, _ = make_clock()
+    mcu = SensorMcu(clock)
+    steward = Steward(mcu, StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"), wired=config.ALL_SENSORS)
+    steward.tick()
+    while not steward.jobs.empty():
+        steward.jobs.get_nowait()
+    for presses in range(1, 6):
+        mcu.raw["button"] = presses
+        steward.tick()
+    assert steward._waiting() == ["snap", "decide"]
+    steward.jobs.get_nowait()
+    steward.busy = "snap"  # still looking at the photo
+    mcu.raw["button"] = 6
+    steward.tick()
+    assert steward._waiting() == ["decide"]
+    assert steward.state()["busy_s"] is not None
+
+
+def test_second_zone_waits_for_the_pump(tmp_path, monkeypatch):
+    reply = {"decisions": [{"zone": 1, "reason": "dry", "action": "water", "seconds": 30},
+                           {"zone": 2, "reason": "dry too", "action": "water", "seconds": 30}]}
+    steward, _, _ = steward_with(reply, tmp_path)
+    calls = []
+    monkeypatch.setattr(steward, "_wait_for_pump", lambda: calls.append(steward.pump_until))
+    steward.tick()
+    steward._job_decide(None)
+    assert len(calls) == 2 and calls[1] > calls[0]  # the second watering waited for the first one's pump time
+    assert [e["mcu"]["ok"] for e in steward.log] == [True, True]
+
+
 def test_knob_turned_to_dry_reaches_gemma(tmp_path):
     clock, _ = make_clock()
     mcu = SensorMcu(clock)

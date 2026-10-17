@@ -32,7 +32,7 @@ WIRED_SENSORS = set()  # e.g. {"knob", "steam"}
 
 # Turning raw analog readings (0..ADC_MAX) into numbers. Calibrate with the
 # "Raw sensor readings" box on the web page: note the value dry and wet, put it here.
-ADC_MAX = 1023        # VERIFY: 10-bit analogRead() on the UNO Q (use 4095 if it reads 12-bit)
+ADC_MAX = 1023        # measured on the UNO Q: analogRead() is 10-bit (the knob tops out at 1023)
 ADC_VREF = 3.3        # volts at ADC_MAX
 KNOB_DRY_RAW = 0      # knob turned fully one way = 0 % soil moisture
 KNOB_WET_RAW = 1023   # ... fully the other way = 100 %

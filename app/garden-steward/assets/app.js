@@ -1,7 +1,7 @@
 // Garden Steward web page: polls /api/state every 2 s and sends button presses to /api/action.
 
 const ICONS = { ok: "✅", think: "💭", water: "💧", alert: "⚠️" };
-const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", snap: "Taking a photo…", journal: "Gemma is writing the journal…" };
+const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", snap: "Gemma is looking at the photo…", journal: "Gemma is writing the journal…" };
 const JOBS = { decide: "deciding", ask: "answering", photo: "the photo check", snap: "taking the photo", journal: "the journal" };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -58,11 +58,16 @@ function logLine(e) {
   return `<li><span class="small">${esc(e.time)}</span> ${badge}${text}${timing(e.llm)}</li>`;
 }
 
+// On the board Gemma takes minutes, so show it's still working.
+const minSec = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 let autoOn = true;
 function render(s) {
   $("icon").textContent = ICONS[s.icon] || "✅";
   $("time").textContent = s.time;
-  $("busy").textContent = (s.busy ? BUSY[s.busy] : s.queued ? `${s.queued} job(s) waiting` : "Gemma idle")
+  const waiting = s.queued ? `${s.queued} more waiting` : "";
+  $("busy").textContent = (s.busy ? `${BUSY[s.busy]} ${minSec(s.busy_s)}${waiting ? ` · ${waiting}` : ""}`
+                                  : waiting || "Gemma idle")
     + (s.auto ? "" : " · automatic decisions paused");
   autoOn = s.auto;
   $("auto-button").textContent = s.auto ? "⏸ Pause automatic decisions" : "▶ Resume automatic decisions";

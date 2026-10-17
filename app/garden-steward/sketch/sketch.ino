@@ -147,7 +147,7 @@ String water(int zone, int seconds) {
 // Raw readings; python/sensors.py turns them into %, °C and "raining".
 // {"a0":512,"a1":300,"a2":70,"a3":600,"a4":20,"button":3,"pump_zone":0,"sim_min":123}
 String read_sensors() {
-  return String("{\"a0\":") + analogRead(PIN_KNOB) +   // VERIFY: 10-bit (0-1023) by default
+  return String("{\"a0\":") + analogRead(PIN_KNOB) +   // 10-bit (0-1023), measured on the board
          ",\"a1\":" + analogRead(PIN_SOIL) +
          ",\"a2\":" + analogRead(PIN_TEMP) +
          ",\"a3\":" + analogRead(PIN_LIGHT) +

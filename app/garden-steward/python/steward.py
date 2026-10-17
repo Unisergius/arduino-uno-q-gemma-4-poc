@@ -32,6 +32,7 @@ class Steward:
         self.jobs = queue.Queue()
         self.lock = threading.Lock()
         self.busy = None
+        self.busy_since = 0.0
         self.icon = "ok"
         self.pump_until = 0.0
         self.answer = None
@@ -84,7 +85,7 @@ class Steward:
                 self.jobs.put(("decide", None))
         if now.hour == 20 and self.last_journal_day != now.date():
             self.last_journal_day = now.date()
-            self.jobs.put(("journal", None))
+            self._enqueue("journal")
 
     def start(self):
         threading.Thread(target=self._worker, daemon=True).start()
@@ -92,13 +93,23 @@ class Steward:
     def _worker(self):
         while True:
             kind, payload = self.jobs.get()
-            self.busy = kind
+            self.busy, self.busy_since = kind, time.monotonic()
             try:
                 getattr(self, f"_job_{kind}")(payload)
             except Exception as error:
                 self._write_log("error", job=kind, error=str(error))
             finally:
                 self.busy = None
+
+    def _waiting(self):
+        """The kinds of job waiting in the queue (not the one running)."""
+        with self.jobs.mutex:
+            return [kind for kind, _ in self.jobs.queue]
+
+    def _enqueue(self, kind):
+        """Queue a Gemma job unless the same one is already waiting: on the board each takes minutes."""
+        if kind not in self._waiting():
+            self.jobs.put((kind, None))
 
     # --- Gemma jobs --------------------------------------------------------------------
 
@@ -118,6 +129,8 @@ class Steward:
             result = brain.decide(summary, text, self.llm)
         icon = "ok"
         for d in result["decisions"]:
+            if d["action"] == "water":
+                self._wait_for_pump()  # one pump: the MCU refuses a second zone while the first is watering
             outcome = self._act(d["zone"], d["seconds"]) if d["action"] == "water" else None
             self._write_log("decision", zone=d["zone"], action=d["action"], seconds=d["seconds"],
                             reason=d["reason"], source=result["source"], mcu=outcome,
@@ -141,9 +154,11 @@ class Steward:
         self._show("ok" if not outcome or outcome["ok"] else "alert")
 
     def check_now(self):
+        if self.busy == "snap" or "snap" in self._waiting():
+            return  # already looking at the photo; pressing again would only queue minutes of work
         self.last_decision_h = self.clock.hours()
         self.jobs.put(("snap", None))
-        self.jobs.put(("decide", None))
+        self._enqueue("decide")
 
     def _job_snap(self, _):
         """Grab a frame from the reCamera - or, with no camera, use the test drawing picked on the web page."""
@@ -185,6 +200,10 @@ class Steward:
                 self.history.watered(int(zone), self.clock.hours())
             self.pump_until = time.monotonic() + outcome["seconds"]
         return outcome
+
+    def _wait_for_pump(self):
+        while time.monotonic() < self.pump_until + 0.5:
+            time.sleep(0.2)
 
     def _show(self, icon):
         self.icon = icon
@@ -234,6 +253,7 @@ class Steward:
             "zones": {z: info for z, info in config.ZONES.items()},
             "icon": icon,
             "busy": self.busy,
+            "busy_s": round(time.monotonic() - self.busy_since) if self.busy else None,
             "queued": self.jobs.qsize(),
             "gemma": "off" if self.llm is None else f"{self.llm.model} @ {self.llm.base_url or 'looking for the server…'}",
             "auto": self.auto_decide,
@@ -291,13 +311,13 @@ class Steward:
             return {"ok": True}
         if kind == "decide":
             self.last_decision_h = self.clock.hours()
-            self.jobs.put(("decide", None))
+            self._enqueue("decide")
         elif kind == "ask":
             self.jobs.put(("ask", str(action["question"])[:300]))
         elif kind == "photo":
             self.jobs.put(("photo", {"image_b64": action["image_b64"], "mime": action.get("mime", "image/jpeg")}))
         elif kind == "journal":
-            self.jobs.put(("journal", None))
+            self._enqueue("journal")
         elif kind == "check":  # same as the yellow button
             self.check_now()
         elif kind == "water":  # the "try to overwater it" button: straight to the MCU, no Gemma
