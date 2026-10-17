@@ -222,3 +222,26 @@ The real Gemma 4 E2B (`google/gemma-4-E2B-it-qat-q4_0-gguf`) in llama.cpp, with 
   The built-in test drawings were judged correctly every time (healthy 3/3, sick 3/3, ~12–14 s each).
 
 The code is in [`app/garden-steward/`](../app/garden-steward/README.md) and the Phase 0 test in [`spike/`](../spike/README.md).
+
+## 11. Phase 0 on the UNO Q (measured, 17 Oct 2026)
+
+Gemma 4 E2B, Google's QAT Q4_0 (3.35 GB) + Google's photo part (0.99 GB), Arduino's prebuilt llama.cpp,
+4 threads, on the 4 GB UNO Q:
+
+| What | Measured | Goal |
+|---|---|---|
+| One decision, cold | **166 s** (352 prompt + 126 answer tokens), correct and valid JSON | under 90 s |
+| Writing speed (tg64) | 2.36 tok/s | 2+ |
+| Reading speed (pp256) | 3.69 tok/s: reading the prompt is the slow part | |
+| Peak memory (llama-server) | 3063 MB, of 3669 MB total (+1.8 GB swap) | |
+| Disk | `/` and `/home` are one 9.8 GB disk, 2.8 GB free after the download | |
+
+**Consequences**
+- Gemma 4 runs as **our own llama.cpp server on the board** (`spike/serve_gemma.sh`), not in App Lab's
+  `arduino:llm` brick (it offers only Gemma 3 1B / Qwen 3.5 0.8B on the UNO Q, its container is capped, and
+  there's no room for a second copy of the model). The app finds the server by itself.
+- **Prompt reuse** (`-np 1`): the ~200-token instructions never change, so a warm decision re-reads only
+  ~150 tokens (measured on x86). Expected on the board: roughly 80–90 s instead of 166 s (to be confirmed).
+- **Smaller photo part** (`SMALL_PHOTO=1`): ggml-org's 0.56 GB Q8_0 projector gives the same verdicts on both
+  test drawings and ~0.4 GB less memory.
+- **Live demo:** pause automatic decisions and ask Gemma on demand; talk while it thinks.
