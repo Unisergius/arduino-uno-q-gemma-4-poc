@@ -392,8 +392,8 @@ def test_a_failed_job_stops_the_thinking_animation(tmp_path):
     steward.jobs.put(("journal", None))
     steward.llm = None  # "Gemma is off" makes the job fail
     steward.start()
-    for _ in range(50):
-        if steward.log:
+    for _ in range(100):
+        if steward.log and steward.busy is None:
             break
         time.sleep(0.02)
     assert steward.log[-1]["kind"] == "error" and steward.mcu.icon == "alert"
