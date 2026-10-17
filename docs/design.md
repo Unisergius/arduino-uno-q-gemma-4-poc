@@ -241,7 +241,18 @@ Gemma 4 E2B, Google's QAT Q4_0 (3.35 GB) + Google's photo part (0.99 GB), Arduin
   `arduino:llm` brick (it offers only Gemma 3 1B / Qwen 3.5 0.8B on the UNO Q, its container is capped, and
   there's no room for a second copy of the model). The app finds the server by itself.
 - **Prompt reuse** (`-np 1`): the ~200-token instructions never change, so a warm decision re-reads only
-  ~150 tokens (measured on x86). Expected on the board: roughly 80–90 s instead of 166 s (to be confirmed).
+  the new report. **Measured on the board** (`serve_gemma.sh`, `SMALL_PHOTO=1`, 4 threads):
+
+  | | Cold | Warm |
+  |---|---|---|
+  | Total | 159.2 s | **97.5 s** |
+  | Prompt tokens read / reused | 352 / 0 | 137 / 200 |
+  | Reading (prefill) | 103 s at 3.4 tok/s | **43 s** at 3.2 tok/s |
+  | Writing (decode) | ~56 s, 114 tokens at 2.0 tok/s | ~55 s, 112 tokens at 2.0 tok/s |
+
+  Both decisions were sensible (cold: water tomatoes 40 s, lettuce waits; warm: both wait). Writing is now
+  the biggest cost: shorter `reason` strings are the next lever. Memory with the 0.56 GB photo part:
+  llama-server peak 3074 MB (RSS 2684 MB), 2390 MB still available on the board (was 1942 MB).
 - **Smaller photo part** (`SMALL_PHOTO=1`): ggml-org's 0.56 GB Q8_0 projector gives the same verdicts on both
   test drawings and ~0.4 GB less memory.
 - **Live demo:** pause automatic decisions and ask Gemma on demand; talk while it thinks.
