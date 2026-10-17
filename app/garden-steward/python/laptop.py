@@ -58,6 +58,19 @@ def make_handler(steward):
     return Handler
 
 
+def bind(handler, port, tries=20):
+    """Port 7000 like on the board. On a Mac, AirPlay Receiver usually has it, so try the next ones."""
+    for candidate in range(port, port + tries):
+        try:
+            server = ThreadingHTTPServer(("0.0.0.0", candidate), handler)
+        except OSError:
+            continue
+        if candidate != port:
+            print(f"Port {port} is busy (on a Mac: usually AirPlay Receiver), using {candidate} instead.")
+        return server
+    raise SystemExit(f"No free port between {port} and {port + tries - 1}. Pick one with --port, e.g. --port 8123")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", type=int, default=7000)
@@ -71,10 +84,11 @@ def main():
     llm = None if args.no_llm else LlmClient(base_url=args.llm_url, model=args.model)
     steward = Steward(FakeMcu(clock, bench=not args.no_bench), llm, clock=clock)
 
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(steward))
+    server = bind(make_handler(steward), args.port)
+    port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
     steward.start()
-    print(f"Garden Steward running. Open http://localhost:{args.port} (Ctrl+C to stop)")
+    print(f"Garden Steward running. Open http://localhost:{port} (Ctrl+C to stop)")
     try:
         while True:
             steward.tick()

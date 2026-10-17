@@ -104,7 +104,8 @@ cd app/garden-steward/python
 python3 laptop.py --no-llm     # quickest: no Gemma, the simple fallback rule decides
 python3 laptop.py              # with Gemma: needs llama-server running (below)
 ```
-Open http://localhost:7000 (or `http://<laptop-ip>:7000` on your phone, same Wi‑Fi).
+Open the address it prints, normally http://localhost:7000 (or `http://<laptop-ip>:7000` on your phone,
+same Wi‑Fi). On a Mac, AirPlay Receiver often holds port 7000, so it moves to 7001 and says so.
 
 - **Test bench card** (laptop only): sliders stand in for the **knob**, **soil probe**, **temperature**
   and **light** sensors, a checkbox for the **wet fingertip on the rain sensor**, and a button for the
