@@ -6,6 +6,8 @@ JSON. Python still checks the values, and the MCU still enforces the limits.
 """
 
 import json
+import socket
+import struct
 import time
 import urllib.request
 
@@ -24,7 +26,7 @@ Rules, using the words in the report:
 - above target: wait.
 - If a zone says it is raining now or rain is likely: wait and say so - unless it is VERY DRY.
 - If the water tank is EMPTY or the battery is under 20 %: alert instead of water.
-Write the reason first: one plain sentence, at most 20 words."""
+Write the reason first: one short sentence, at most 12 words."""
 
 ASK_PROMPT = """You are the Garden Steward, the brain of a small off-grid garden.
 Answer the gardener in 1-3 short, friendly sentences, using the report and the recent log.
@@ -53,7 +55,7 @@ def decision_schema(zones=config.ZONES):
                     "type": "object",
                     "properties": {
                         "zone": {"type": "integer", "enum": list(zones)},
-                        "reason": {"type": "string", "maxLength": 160},
+                        "reason": {"type": "string", "maxLength": 100},
                         "action": {"type": "string", "enum": list(ACTIONS)},
                         "seconds": {"type": "integer", "minimum": 0, "maximum": 600},
                     },
@@ -100,23 +102,62 @@ def pick_model(configured, available):
     return gemma4[0] if gemma4 else configured
 
 
+def docker_host():
+    """The board as seen from inside an App Lab container: the default gateway (None outside Linux)."""
+    try:
+        with open("/proc/net/route") as f:
+            for line in f.readlines()[1:]:
+                fields = line.split()
+                if len(fields) > 2 and fields[1] == "00000000":
+                    return socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def candidate_urls():
+    """Where Gemma may be running, in the order we look: our own server (spike/serve_gemma.sh) directly,
+    the same server seen from inside App Lab's container, then App Lab's LLM brick."""
+    urls = ["http://localhost:8080/v1"]
+    host = docker_host()
+    if host:
+        urls.append(f"http://{host}:8080/v1")
+    return urls + ["http://llamacpp-models-runner:9999/v1"]
+
+
+def pick_server(answers):
+    """From [(url, model ids)], the first server that has a Gemma 4, else the first that answered."""
+    for url, models in answers:
+        if any("gemma-4" in m.lower() for m in models):
+            return url, models
+    return answers[0] if answers else (None, [])
+
+
 class LlmClient:
     """A tiny client for llama.cpp's OpenAI-style /chat/completions endpoint."""
 
     def __init__(self, base_url=config.LLM_BASE_URL, model=config.LLM_MODEL, timeout=config.LLM_TIMEOUT_S):
-        self.base_url = base_url.rstrip("/")
+        self.auto = base_url == "auto"
+        self.base_url = "" if self.auto else base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
         self._model_checked = False
 
     def _check_model(self):
-        """Once, ask the server which models it has, and switch to its Gemma 4 if the name differs."""
-        try:
-            with urllib.request.urlopen(f"{self.base_url}/models", timeout=10) as response:
-                available = [m["id"] for m in json.load(response).get("data", [])]
-        except Exception:
+        """Once: find the server (when "auto") and switch to the Gemma 4 it serves if the name differs."""
+        answers = []
+        for url in candidate_urls() if self.auto else [self.base_url]:
+            try:
+                with urllib.request.urlopen(f"{url}/models", timeout=3) as response:
+                    answers.append((url, [m["id"] for m in json.load(response).get("data", [])]))
+            except Exception:
+                continue  # nothing there (yet)
+        url, available = pick_server(answers)
+        if url is None:
+            if self.auto:
+                raise RuntimeError("no Gemma server found - on the board run: bash spike/serve_gemma.sh")
             return  # server not up yet: try again next time
-        self.model = pick_model(self.model, available)
+        self.base_url, self.model = url, pick_model(self.model, available)
         self._model_checked = True
 
     def chat(self, system, user, schema=None, max_tokens=200, image_b64=None, image_mime="image/jpeg", temperature=0.2):
@@ -163,6 +204,7 @@ class LlmClient:
         info = {
             "seconds": round(seconds, 1),
             "prompt_tokens": usage.get("prompt_tokens"),
+            "prompt_read": timings.get("prompt_n"),  # the rest came from llama-server's prompt cache
             "output_tokens": usage.get("completion_tokens"),
             "prefill_tok_s": round(timings["prompt_per_second"], 1) if "prompt_per_second" in timings else None,
             "decode_tok_s": round(timings["predicted_per_second"], 1) if "predicted_per_second" in timings else None,

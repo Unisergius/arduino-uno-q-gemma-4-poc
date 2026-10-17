@@ -58,10 +58,14 @@ function logLine(e) {
   return `<li><span class="small">${esc(e.time)}</span> ${badge}${text}${timing(e.llm)}</li>`;
 }
 
+let autoOn = true;
 function render(s) {
   $("icon").textContent = ICONS[s.icon] || "✅";
   $("time").textContent = s.time;
-  $("busy").textContent = s.busy ? BUSY[s.busy] : s.queued ? `${s.queued} job(s) waiting` : "Gemma idle";
+  $("busy").textContent = (s.busy ? BUSY[s.busy] : s.queued ? `${s.queued} job(s) waiting` : "Gemma idle")
+    + (s.auto ? "" : " · automatic decisions paused");
+  autoOn = s.auto;
+  $("auto-button").textContent = s.auto ? "⏸ Pause automatic decisions" : "▶ Resume automatic decisions";
   $("gemma").textContent = `Gemma: ${s.gemma}`;
 
   const g = s.garden;
@@ -139,6 +143,7 @@ document.querySelectorAll("#bench [data-bench]").forEach((input) => {
   }));
 });
 $("bench-button").addEventListener("click", () => send({ type: "button" }));
+$("auto-button").addEventListener("click", () => send({ type: "auto", on: !autoOn }));
 
 async function refresh() {
   try {

@@ -46,8 +46,11 @@ RAIN_BONUS_PER_H = 6       # rain (real or simulated) adds this much per hour
 # The sketch uses the same number (TIME_SCALE in sketch.ino). Use 1 for a real garden.
 TIME_SCALE = 60
 
-# How often Gemma looks at the garden (simulated hours).
-DECIDE_EVERY_H = 2
+# How often Gemma looks at the garden (simulated hours). On the UNO Q one decision takes 2-3 real
+# minutes, so with 1 real minute = 1 simulated hour this leaves Gemma some breathing room.
+# The web page can pause automatic decisions (for a live demo: decide only when you press a button).
+DECIDE_EVERY_H = 4
+AUTO_DECIDE = os.getenv("AUTO_DECIDE", "1") != "0"
 # Below this soil moisture (%) Gemma is asked right away, and the fallback rule waters.
 URGENT_SOIL = 25
 FALLBACK_WATER_S = 20
@@ -59,10 +62,11 @@ MAX_PER_DAY = 3
 BATTERY_FLOOR = 20
 
 # Where Gemma 4 runs: a llama.cpp server with an OpenAI-style API.
-# On the board, App Lab's LLM brick starts it as "llamacpp-models-runner" on port 9999.
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://llamacpp-models-runner:9999/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "gemma-4-E2B_q4_0-it")
-LLM_TIMEOUT_S = int(os.getenv("LLM_TIMEOUT_S", "300"))
+# "auto" looks for it: our own server on the board (spike/serve_gemma.sh, port 8080), seen directly or
+# from inside App Lab's container, then App Lab's LLM brick. Set a URL to skip the search.
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "auto")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemma-4-E2B_q4_0-it")  # any installed Gemma 4 is found by itself
+LLM_TIMEOUT_S = int(os.getenv("LLM_TIMEOUT_S", "420"))     # a photo check can take minutes on the board
 
 # Optional: a Seeed reCamera's video stream. Empty = no camera (the normal case now):
 # "Check now" and the yellow button then use the test drawing picked on the web page,

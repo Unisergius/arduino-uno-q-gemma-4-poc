@@ -35,6 +35,7 @@ class Steward:
         self.pump_until = 0.0
         self.answer = None
         self.photo = None
+        self.auto_decide = config.AUTO_DECIDE  # off = Gemma decides only when asked (live demos)
         self.test_photo = config.TEST_PHOTOS[0]  # the drawing the pretend camera "sees" when there is no camera
         self.raw = {}   # raw readings from the MCU (for calibrating)
         self.real = {}  # the same, converted (see sensors.py); empty without sensors
@@ -73,7 +74,7 @@ class Steward:
         if presses is not None:
             self.last_button = presses
 
-        if self.busy is None and self.jobs.empty():
+        if self.auto_decide and self.busy is None and self.jobs.empty():
             since = None if self.last_decision_h is None else now_h - self.last_decision_h
             due = since is None or since >= config.DECIDE_EVERY_H
             urgent = min(snap["moisture"].values()) < config.URGENT_SOIL and (since is None or since >= 1)
@@ -233,7 +234,8 @@ class Steward:
             "icon": icon,
             "busy": self.busy,
             "queued": self.jobs.qsize(),
-            "gemma": "off" if self.llm is None else f"{self.llm.model} @ {self.llm.base_url}",
+            "gemma": "off" if self.llm is None else f"{self.llm.model} @ {self.llm.base_url or 'looking for the server…'}",
+            "auto": self.auto_decide,
             "raw_sensors": self.raw,
             "camera": config.RECAMERA_URL or None,
             "test_photo": self.test_photo,
@@ -259,6 +261,9 @@ class Steward:
             elif kind == "tank":
                 self.garden.tank_empty = bool(action["empty"])
         if kind in ("scenario", "dry", "battery", "tank"):
+            return {"ok": True}
+        if kind == "auto":  # pause / resume Gemma's automatic decisions
+            self.auto_decide = bool(action.get("on"))
             return {"ok": True}
         if kind == "test_photo":  # which drawing the pretend camera "sees"
             if action.get("value") not in config.TEST_PHOTOS:

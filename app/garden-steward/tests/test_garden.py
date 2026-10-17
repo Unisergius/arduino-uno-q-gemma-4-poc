@@ -320,14 +320,14 @@ def test_forced_overwatering_is_refused_the_second_time(tmp_path):
     assert not second["ok"] and "minimum is 4 h" in second["note"]
 
 
-def test_decisions_are_scheduled_every_two_sim_hours(tmp_path):
+def test_decisions_are_scheduled_every_few_sim_hours(tmp_path):
     steward, _, fake = steward_with({}, tmp_path)
     steward.tick()
     assert steward.jobs.get_nowait()[0] == "decide"
-    fake.t = 60  # +1 h: not due yet
+    fake.t = 60 * (config.DECIDE_EVERY_H - 1)  # 1 h early: not due yet
     steward.tick()
     assert steward.jobs.empty()
-    fake.t = 120  # +2 h: due
+    fake.t = 60 * config.DECIDE_EVERY_H  # due
     steward.tick()
     assert steward.jobs.get_nowait()[0] == "decide"
 
@@ -404,6 +404,41 @@ def test_pick_model_finds_the_installed_gemma_4():
     assert brain.pick_model("gemma-4-E2B_q4_0-it", ["Qwen3.5-0.8B-Q4_0", "gemma-4-E2B-it-Q3_K_M"]) == "gemma-4-E2B-it-Q3_K_M"
     assert brain.pick_model("gemma-4-E2B_q4_0-it", ["gemma-3-1b-it-Q4_0"]) == "gemma-4-E2B_q4_0-it"  # no Gemma 4: keep asking for it
     assert brain.pick_model("gemma-4-E2B_q4_0-it", []) == "gemma-4-E2B_q4_0-it"
+
+
+def test_pick_server_prefers_the_one_with_gemma_4():
+    answers = [("http://localhost:8080/v1", ["Qwen3.5-0.8B-Q4_0"]),
+               ("http://172.17.0.1:8080/v1", ["gemma-4-E2B_q4_0-it"])]
+    assert brain.pick_server(answers) == ("http://172.17.0.1:8080/v1", ["gemma-4-E2B_q4_0-it"])
+    assert brain.pick_server(answers[:1])[0] == "http://localhost:8080/v1"
+    assert brain.pick_server([]) == (None, [])
+
+
+def test_candidate_urls_start_with_our_own_server():
+    urls = brain.candidate_urls()
+    assert urls[0] == "http://localhost:8080/v1"
+    assert urls[-1] == "http://llamacpp-models-runner:9999/v1"
+
+
+def test_auto_without_any_server_says_how_to_start_one(monkeypatch):
+    monkeypatch.setattr(brain, "candidate_urls", lambda: ["http://127.0.0.1:9/v1"])  # nothing listens there
+    llm = brain.LlmClient(base_url="auto")
+    with pytest.raises(RuntimeError, match="serve_gemma.sh"):
+        llm.chat("system", "user")
+
+
+def test_pausing_automatic_decisions(tmp_path):
+    steward, _, fake = steward_with({}, tmp_path)
+    assert steward.handle({"type": "auto", "on": False})["ok"]
+    steward.tick()
+    assert steward.jobs.empty(), "no automatic decision while paused"
+    assert steward.state()["auto"] is False
+    steward.handle({"type": "decide"})  # asking by hand still works
+    assert steward.jobs.get_nowait()[0] == "decide"
+    steward.handle({"type": "auto", "on": True})
+    fake.t = 60 * config.DECIDE_EVERY_H  # the next automatic decision comes on schedule again
+    steward.tick()
+    assert steward.jobs.get_nowait()[0] == "decide"
 
 
 def test_unknown_test_drawing_is_refused(tmp_path):

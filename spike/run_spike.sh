@@ -7,7 +7,9 @@
 #   MODEL=small bash spike/run_spike.sh          # pick a size yourself: full | q4 | small | tiny (list below)
 #   MODEL_URL=<.gguf> MMPROJ_URL=<.gguf> bash spike/run_spike.sh   # any other Gemma 4 file
 #   PHOTO=~/garden.jpg bash spike/run_spike.sh   # your own photo for the photo test (default: the "sick" test drawing)
-#   INSTALL_FOR_APPLAB=1 bash spike/run_spike.sh # ...and move the model to where App Lab's LLM brick serves it
+#   INSTALL_FOR_APPLAB=1 bash spike/run_spike.sh # ...and move the model into App Lab's models folder (needs room on /)
+#
+# Afterwards, serve Gemma 4 for the app with: bash spike/serve_gemma.sh  (recommended over INSTALL_FOR_APPLAB)
 set -euo pipefail
 
 # This downloads a llama.cpp built for the UNO Q's Linux (arm64): it cannot run on a Mac or a PC.
@@ -169,6 +171,14 @@ if [ "${INSTALL_FOR_APPLAB:-}" = "1" ]; then
   sudo find "$DEST" -maxdepth 1 -name '*.gguf' ! -name "$MODEL_FILE" ! -name "$MMPROJ_FILE" -print -delete
   FILES=("$MODEL_FILE")
   [ "$VISION" = "1" ] && FILES+=("$MMPROJ_FILE")
+  # App Lab's models folder sits on the small root disk: moving a 3-4 GB model there can fill it up.
+  NEED_MB=$(( $(du -mL "${FILES[@]}" | awk '{s += $1} END {print s}') + 500 ))
+  ROOM_MB=$(df -Pm "$(dirname "$DEST")" 2>/dev/null | awk 'NR==2 {print $4}' || echo 0)
+  if [ "$ROOM_MB" -lt "$NEED_MB" ]; then
+    echo "Not enough room in $(dirname "$DEST"): ${ROOM_MB} MB free, ${NEED_MB} MB needed. Nothing was moved."
+    echo "Run Gemma 4 as our own server instead (no copying): bash spike/serve_gemma.sh"
+    exit 1
+  fi
   for f in "${FILES[@]}"; do
     if [ ! -L "$f" ]; then
       sudo mv "$f" "$DEST/$f"
@@ -181,3 +191,4 @@ fi
 
 echo
 echo "Done. Paste $WORK/results.md back into the chat."
+echo "To run Gemma 4 for the Garden Steward app: bash spike/serve_gemma.sh"

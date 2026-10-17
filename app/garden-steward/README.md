@@ -76,18 +76,19 @@ minutes), or sooner when a zone gets very dry.
 
 ## 3. Run it on the board
 
-1. **Gemma model:** run the Phase 0 spike once (`spike/README.md`) with `INSTALL_FOR_APPLAB=1`.
-   It picks the biggest Gemma 4 E2B that fits the disk and moves it to where App Lab's LLM brick serves it.
-   App Lab's model list only offers Gemma 4 on the VENTUNO Q, but its llama.cpp runner serves any `.gguf` in
-   that folder by file name, and the app finds whichever Gemma 4 is installed. (Plan B: start `llama-server`
-   yourself as in the spike, and set `LLM_BASE_URL` in `python/config.py`.)
+1. **Gemma 4:** run the speed test once (`bash spike/run_spike.sh`, see `spike/README.md`), then start
+   Gemma 4 as its own server on the board: `bash spike/serve_gemma.sh` (again after every reboot).
+   The app finds it by itself (`LLM_BASE_URL = "auto"`). It doesn't use App Lab's LLM brick: on the UNO Q
+   that only offers Gemma 3 1B / Qwen, and its container and the root disk are too small for Gemma 4.
 2. **Import the app into App Lab:** download
    [`dist/garden-steward-applab.zip`](https://github.com/Unisergius/arduino-uno-q-gemma-4-poc/raw/main/dist/garden-steward-applab.zip)
    and use App Lab's **import** to add it (the zip has `garden-steward/app.yaml` at the top, the layout App Lab expects).
    Without import: create a new app and copy in `app.yaml`, `sketch/`, `python/` and `assets/` by hand.
 3. Press **Run**. App Lab compiles the sketch, starts the LLM brick, and starts the Python side.
 4. On your phone (same Wi‑Fi), open `http://<UNO-Q-IP>:7000`.
-5. **With App Lab's Agentic Mode** (App Lab 0.10+): open it and paste
+5. **Live demo tip:** one decision takes about 2–3 minutes on the board. Press **⏸ Pause automatic
+   decisions** before presenting, so Gemma only thinks when you press a button, and talk while it thinks.
+6. **With App Lab's Agentic Mode** (App Lab 0.10+): open it and paste
    > Read AGENTS.md in this app first. Then run the app and go through its "First run on the board" checklist
    > with me one step at a time. Explain each error in plain words before changing code, and never change
    > the safety limits or suggest 5 V on the analog pins.

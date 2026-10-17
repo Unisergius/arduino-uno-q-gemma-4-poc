@@ -4,6 +4,6 @@ description: "Paper Garden demo: Gemma 4 decides when to water, the MCU enforces
 
 bricks:
   - arduino:web_ui
-  # Starts the local llama.cpp server ("llamacpp-models-runner", port 9999).
-  # The app asks it for the model named in python/config.py (LLM_MODEL).
-  - arduino:llm
+# No arduino:llm brick: on the UNO Q App Lab only offers Gemma 3 1B / Qwen there, and its container
+# and root disk are too small for Gemma 4. Gemma 4 runs as our own server instead
+# (bash spike/serve_gemma.sh on the board), and the app finds it by itself.

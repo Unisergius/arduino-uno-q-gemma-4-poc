@@ -2,7 +2,15 @@
 
 **Garden Steward – Paper Garden demo.** Gemma 4 E2B, running locally on this Arduino UNO Q, decides when to
 water a garden drawn on paper. The STM32 sketch enforces the safety limits. **No internet at runtime**:
-the only network use is the local llama.cpp server (App Lab's `arduino:llm` brick) and the local web page.
+the only network use is the local llama.cpp server and the local web page.
+
+**Where Gemma runs:** NOT in App Lab's `arduino:llm` brick (on the UNO Q it only offers Gemma 3 1B / Qwen,
+its container limit and the 2.8 GB-free root disk are too small for Gemma 4). Gemma 4 runs as our own
+llama.cpp server on the board, started with `bash spike/serve_gemma.sh` from the repository clone
+(files in `~/gemma-spike` on `/home`). The app finds it by itself (`LLM_BASE_URL = "auto"` in `config.py`:
+localhost:8080, then the Docker gateway:8080 from inside the app container, then the brick).
+Measured on this board: one cold decision 166 s (prompt reading ~3.7 tok/s, writing ~2.4 tok/s), peak
+memory ~3.1 GB with the 0.99 GB photo part. Don't move the model onto `/`.
 
 ## Files
 - `sketch/sketch.ino`: MCU side. Reads the DFRobot Gravity sensors, drives the relay "pump", the LEDs and the
@@ -40,10 +48,11 @@ Each item is marked `VERIFY` in the code. Fix only what fails.
    on release instead, set `BUTTON_PRESSED = LOW` in the sketch.
 6. **Relay.** Press "Force: water zone 1 for 10 min": the relay should click for 60 s, and a second press
    should be refused (4 h minimum). If it never clicks, the 3.3 V signal may not switch the 5 V relay module.
-7. **Gemma.** The footer shows which model and URL the app uses. If decisions say "Gemma is off" or time
-   out, check that the LLM brick serves the model named `LLM_MODEL` in `config.py` (the speed test in the
-   repo's `spike/` folder can install it with `INSTALL_FOR_APPLAB=1`). Plan B: run `llama-server` by hand
-   (see `spike/run_spike.sh`) and set `LLM_BASE_URL`.
+7. **Gemma.** The footer shows which model and URL the app uses. If it says "looking for the server" or the
+   log says "no Gemma server found": in the board's terminal run `bash spike/serve_gemma.sh status`, and
+   `bash spike/serve_gemma.sh` to start it. If the app container can't reach the board's port 8080, set
+   `LLM_BASE_URL` to `http://<board-ip>:8080/v1`. For a live demo, press "Pause automatic decisions":
+   a decision takes 2–3 minutes here.
 8. **Unplugged sensors.** Remove each module that isn't wired from `CONNECTED` in `python/sensors.py`,
    otherwise its floating pin reads noise.
 

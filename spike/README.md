@@ -63,7 +63,19 @@ unless you pass `PHOTO=...`; the right answer is "sick".
 - Try fewer or more threads: `THREADS=3 bash spike/run_spike.sh`.
 - Last resort: Gemma 3 1B (App Lab offers it on the UNO Q) for the "Decide" job only.
 
-## App Lab and Gemma 4
+## Running Gemma 4 for the app (after the test)
+
+```bash
+bash spike/serve_gemma.sh            # starts Gemma 4 in the background from ~/gemma-spike
+bash spike/serve_gemma.sh status     # running? which model? free memory
+bash spike/serve_gemma.sh stop
+```
+It runs outside App Lab's containers, from the files the test already downloaded to `/home`: nothing is
+copied to the small root disk, and App Lab's LLM container limit doesn't apply. It uses the smallest photo
+part in `~/gemma-spike` (`VISION=0` for text only), and one conversation slot so the unchanged start of
+each prompt is reused. The Garden Steward app finds it by itself. Run it again after a reboot.
+
+## App Lab and Gemma 4 (not needed with serve_gemma.sh)
 App Lab's model list offers Gemma 4 only on the VENTUNO Q, but its llama.cpp runner serves **every `.gguf`
 file in its models folder**, named after the file (see `containers/ai/llamacpp-runner` in Arduino's
 `app-bricks-py`). `INSTALL_FOR_APPLAB=1` **moves** the files there (no second copy on the disk) and leaves a
