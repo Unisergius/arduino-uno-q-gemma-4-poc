@@ -82,7 +82,9 @@ def main():
 
     clock = SimClock()
     llm = None if args.no_llm else LlmClient(base_url=args.llm_url, model=args.model)
-    steward = Steward(FakeMcu(clock, bench=not args.no_bench), llm, clock=clock)
+    bench = not args.no_bench
+    steward = Steward(FakeMcu(clock, bench=bench), llm, clock=clock,
+                      wired=config.ALL_SENSORS if bench else set())
 
     server = bind(make_handler(steward), args.port)
     port = server.server_address[1]

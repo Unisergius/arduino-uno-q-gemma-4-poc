@@ -22,6 +22,13 @@ PINS = {
     "D6": "Red LED module - alert (optional)",
 }
 
+# Which kit modules are actually wired to the board. An unwired analog pin reads random noise, so a
+# module only counts once you add it here. Empty = nothing wired: the simulation and the web page's
+# buttons (Dry zone, Heatwave, Rain coming, Check now) stand in for every sensor - the demo still works.
+# The relay (D4), the button (D2) and the LED matrix need no entry. Laptop mode's test bench uses all five.
+ALL_SENSORS = {"knob", "soil", "temp", "light", "steam"}
+WIRED_SENSORS = set()  # e.g. {"knob", "steam"}
+
 # Turning raw analog readings (0..ADC_MAX) into numbers. Calibrate with the
 # "Raw sensor readings" box on the web page: note the value dry and wet, put it here.
 ADC_MAX = 1023        # VERIFY: 10-bit analogRead() on the UNO Q (use 4095 if it reads 12-bit)

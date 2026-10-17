@@ -53,8 +53,9 @@ Each item is marked `VERIFY` in the code. Fix only what fails.
    `bash spike/serve_gemma.sh` to start it. If the app container can't reach the board's port 8080, set
    `LLM_BASE_URL` to `http://<board-ip>:8080/v1`. For a live demo, press "Pause automatic decisions":
    a decision takes 2–3 minutes here.
-8. **Unplugged sensors.** Remove each module that isn't wired from `CONNECTED` in `python/sensors.py`,
-   otherwise its floating pin reads noise.
+8. **Wired sensors.** `WIRED_SENSORS` in `python/config.py` lists the kit modules that are really wired
+   (empty by default: everything simulated, which is a valid demo). Add a module only once it's plugged in;
+   an unwired analog pin reads noise.
 
 ## If the Bridge stops answering
 Community tip: in the board's terminal run `arduino-app-cli system cleanup` and `docker network prune`,

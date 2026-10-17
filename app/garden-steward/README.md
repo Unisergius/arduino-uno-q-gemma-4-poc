@@ -9,7 +9,12 @@ No internet is needed while it runs.
 - `assets/`: the web page you open on your phone.
 - `tests/`: automatic checks (`python3 -m pytest tests`).
 
-## 1. Wiring (DFRobot Gravity kit)
+## 1. Wiring (DFRobot Gravity kit) – optional
+
+**No cables? The demo works without any wiring.** The LED matrix shows the watering, and the web page's
+buttons stand in for the sensors: Dry zone, Heatwave, Rain coming, Force, the test drawings + Check now.
+Gemma and the safety limits are the real thing either way. Wire modules only if you have male-to-male
+jumpers (the kit's cables end in female plugs, like the board's headers), and list them in `WIRED_SENSORS`.
 
 ![The 9 kit modules to use, with their pins and power](../../docs/images/kit-wiring.jpg)
 
@@ -51,9 +56,10 @@ nothing from the 5 V rail reaches A0–A5.
 **Short on jumpers?** Wire the four that carry the demo first: **knob (A0)**, **relay (D4)**,
 **yellow button (D2)** and **rain (A4)**. Then add temperature, soil probe, light and the LEDs.
 
-Not every module plugged in? Remove its name from `CONNECTED` in `python/sensors.py`, and the
-simulation fills in for it. Unplugged analog pins read random noise. (An unplugged button is fine:
-the sketch holds D2 low.)
+**Tell the app what you wired:** add the names to `WIRED_SENSORS` in `python/config.py`
+(`"knob"`, `"soil"`, `"temp"`, `"light"`, `"steam"`). It starts empty, because unwired analog pins read random
+noise; anything not listed is simulated. The relay, the button (the sketch holds D2 low) and the LED matrix
+need no entry.
 
 **Calibrate** (2 minutes): open the web page, expand **"Raw sensor readings"**, and note the knob at both
 ends and the soil probe dry and in the damp tissue. Put those numbers in `python/config.py`

@@ -95,7 +95,7 @@ def test_unknown_scenario_is_rejected():
 
 def test_raw_readings_become_percent_celsius_and_rain():
     raw = {"a0": 512, "a1": 350, "a2": 78, "a3": 400, "a4": 600, "button": 2}
-    real = sensors.convert(raw)
+    real = sensors.convert(raw, connected=config.ALL_SENSORS)
     assert real["soil"] == {1: pytest.approx(50.0, abs=0.1), 2: 50.0}
     assert real["temp_c"] == pytest.approx(25.2, abs=0.1)  # 78 / 1023 * 3.3 V * 100
     assert real["light"] == 50.0
@@ -356,7 +356,7 @@ def test_decision_sees_a_button_press_made_just_before(tmp_path):
 def test_yellow_button_takes_a_photo_and_decides(tmp_path):
     clock, _ = make_clock()
     mcu = SensorMcu(clock)
-    steward = Steward(mcu, StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward = Steward(mcu, StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"), wired=config.ALL_SENSORS)
     steward.tick()
     while not steward.jobs.empty():
         steward.jobs.get_nowait()  # drop the first scheduled decision
@@ -371,7 +371,7 @@ def test_knob_turned_to_dry_reaches_gemma(tmp_path):
     reply = {"decisions": [{"zone": 1, "reason": "dry", "action": "water", "seconds": 30},
                            {"zone": 2, "reason": "ok", "action": "wait", "seconds": 0}]}
     llm = StubLlm(reply)
-    steward = Steward(mcu, llm, clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward = Steward(mcu, llm, clock=clock, log_path=str(tmp_path / "log.jsonl"), wired=config.ALL_SENSORS)
     mcu.raw["a0"] = 100  # knob almost fully "dry"
     steward.tick()
     steward._job_decide(None)
@@ -462,7 +462,7 @@ def test_bench_sliders_go_through_the_real_sensor_code():
     mcu = FakeMcu(clock, bench=True)
     for name, value in {"knob": 20, "soil": 80, "temp_c": 31, "light": 50, "raining": True}.items():
         mcu.set_bench(name, value)
-    real = sensors.convert(mcu.read_sensors())
+    real = sensors.convert(mcu.read_sensors(), connected=config.ALL_SENSORS)
     assert real["soil"] == {1: pytest.approx(20, abs=0.5), 2: pytest.approx(80, abs=0.5)}
     assert real["temp_c"] == pytest.approx(31, abs=0.5)
     assert real["light"] == pytest.approx(50, abs=0.5)
@@ -471,7 +471,8 @@ def test_bench_sliders_go_through_the_real_sensor_code():
 
 def test_bench_yellow_button_takes_a_photo_and_decides(tmp_path):
     clock, _ = make_clock()
-    steward = Steward(FakeMcu(clock, bench=True), StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward = Steward(FakeMcu(clock, bench=True), StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"),
+                      wired=config.ALL_SENSORS)
     steward.tick()
     while not steward.jobs.empty():
         steward.jobs.get_nowait()  # drop the first scheduled decision
@@ -518,3 +519,14 @@ def test_applab_zip_matches_the_app():
     with zipfile.ZipFile(zip_path) as archive:
         actual = {name: archive.read(name) for name in archive.namelist()}
     assert actual == expected, "dist/garden-steward-applab.zip is out of date: run python3 tools/make_applab_zip.py"
+
+
+def test_nothing_wired_by_default_so_floating_pins_are_ignored(tmp_path):
+    clock, _ = make_clock()
+    mcu = SensorMcu(clock)
+    mcu.raw.update({"a0": 3, "a4": 1000})  # noise on unwired pins: "bone dry" and "raining"
+    steward = Steward(mcu, None, clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward.tick()
+    snap = steward.garden.snapshot(clock.now(), steward.real)
+    assert snap["sources"]["soil"] == {1: "simulated", 2: "simulated"}
+    assert snap["raining"] is False

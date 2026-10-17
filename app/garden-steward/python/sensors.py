@@ -1,15 +1,11 @@
 """Turn the MCU's raw analog readings into garden numbers, using the calibration in config.py.
 
 The sketch sends raw values: {"a0": 512, "a1": 300, "a2": 70, "a3": 600, "a4": 20, "button": 3, ...}.
-A sensor that isn't plugged in (or isn't listed in CONNECTED) comes back as None,
+A sensor that isn't listed in config.WIRED_SENSORS comes back as None,
 and the simulation fills in for it.
 """
 
 import config
-
-# Remove a name here if that module isn't wired up - floating pins read random noise.
-CONNECTED = {"knob", "soil", "temp", "light", "steam"}
-
 
 def to_percent(raw, low, high):
     if raw is None:
@@ -17,9 +13,11 @@ def to_percent(raw, low, high):
     return round(max(0.0, min(100.0, (raw - low) / (high - low) * 100)), 1)
 
 
-def convert(raw, connected=CONNECTED):
+def convert(raw, connected=None):
+    """`connected`: the modules that are wired (default: config.WIRED_SENSORS)."""
     if not raw:
         return {}
+    connected = config.WIRED_SENSORS if connected is None else connected
     a = {pin: raw.get(pin) for pin in ("a0", "a1", "a2", "a3", "a4")}
 
     temp = None

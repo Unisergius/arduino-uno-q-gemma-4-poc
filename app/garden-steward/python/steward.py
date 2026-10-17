@@ -20,8 +20,9 @@ from stats import History, describe, summarise
 
 
 class Steward:
-    def __init__(self, mcu, llm, clock=None, garden=None, log_path=config.LOG_PATH):
+    def __init__(self, mcu, llm, clock=None, garden=None, log_path=config.LOG_PATH, wired=None):
         self.mcu = mcu
+        self.wired = config.WIRED_SENSORS if wired is None else wired  # kit modules actually wired up
         self.llm = llm  # None = Gemma off, fallback rule only
         self.clock = clock or SimClock()
         self.garden = garden or PaperGarden()
@@ -51,7 +52,7 @@ class Steward:
     def tick(self):
         now_h, now = self.clock.hours(), self.clock.now()
         self.raw = self._mcu("read_sensors") or {}
-        self.real = sensors.convert(self.raw)
+        self.real = sensors.convert(self.raw, self.wired)
         with self.lock:
             hours = now_h - self.last_tick_h
             self.last_tick_h = now_h
