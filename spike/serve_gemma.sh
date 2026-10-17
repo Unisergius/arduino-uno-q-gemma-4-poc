@@ -5,6 +5,8 @@
 #
 #   bash spike/serve_gemma.sh            # start in the background (photos on if a photo part is there)
 #   VISION=0 bash spike/serve_gemma.sh   # text only: about 0.5-1 GB less memory, no photo check
+#   SMALL_PHOTO=1 bash spike/serve_gemma.sh  # first download the 0.56 GB photo part (0.4 GB less memory
+#                                            # than Google's 0.99 GB one; tested with the same answers)
 #   bash spike/serve_gemma.sh status     # running? which model?
 #   bash spike/serve_gemma.sh stop
 set -euo pipefail
@@ -48,6 +50,13 @@ MODEL_FILE="${MODEL_FILE:-$(ls -S "$WORK"/*.gguf 2>/dev/null | grep -v mmproj | 
 [ -n "$MODEL_FILE" ] && [ -f "$MODEL_FILE" ] || { echo "No Gemma 4 .gguf in $WORK: run bash spike/run_spike.sh first."; exit 1; }
 NAME="$(basename "${MODEL_FILE%.gguf}")"
 
+MMPROJ_Q8_URL="https://huggingface.co/ggml-org/gemma-4-E2B-it-GGUF/resolve/main/mmproj-gemma-4-E2B-it-Q8_0.gguf"
+if [ "$VISION" = "1" ] && [ "${SMALL_PHOTO:-}" = "1" ] && [ ! -f "$WORK/$(basename "$MMPROJ_Q8_URL")" ]; then
+  echo "Downloading the smaller photo part (0.56 GB)..."
+  curl -L --fail -o "$WORK/$(basename "$MMPROJ_Q8_URL").part" "$MMPROJ_Q8_URL"
+  mv "$WORK/$(basename "$MMPROJ_Q8_URL").part" "$WORK/$(basename "$MMPROJ_Q8_URL")"
+fi
+
 VISION_ARGS=()
 if [ "$VISION" = "1" ]; then
   # The smallest photo part there is: the Q8_0 one needs about 0.4 GB less memory than the 0.99 GB one.
@@ -56,11 +65,17 @@ if [ "$VISION" = "1" ]; then
 fi
 
 export LD_LIBRARY_PATH="$WORK/pkg-cpu/lib"
+# llama-server keeps old prompts in memory to reuse them, up to 8 GB by default: far more than this
+# board has. Cap it (only if this llama.cpp build knows the option).
+CACHE_ARGS=()
+if "$WORK/pkg-cpu/bin/llama-server" --help 2>/dev/null | grep -q -- "--cache-ram"; then
+  CACHE_ARGS=(--cache-ram "${CACHE_RAM_MB:-256}")
+fi
 # --host 0.0.0.0: App Lab's app container reaches the board through the Docker gateway (anyone on the
 #   same Wi-Fi can reach it too, so stop it when you're done).
 # -np 1: one conversation slot, so the unchanged start of each prompt is reused instead of read again.
 # setsid + nohup + </dev/null: it keeps running after the terminal, ssh or `adb shell` that started it closes.
-setsid nohup "$WORK/pkg-cpu/bin/llama-server" -m "$MODEL_FILE" "${VISION_ARGS[@]}" --alias "$NAME" \
+setsid nohup "$WORK/pkg-cpu/bin/llama-server" -m "$MODEL_FILE" "${VISION_ARGS[@]}" "${CACHE_ARGS[@]}" --alias "$NAME" \
   -c 4096 -np 1 -t "$THREADS" --host 0.0.0.0 --port "$PORT" \
   --reasoning off --reasoning-budget 0 > "$LOG" 2>&1 < /dev/null &
 echo $! > "$PID_FILE"

@@ -70,8 +70,10 @@ bash spike/serve_gemma.sh            # starts Gemma 4 in the background from ~/g
 bash spike/serve_gemma.sh status     # running? which model? free memory
 bash spike/serve_gemma.sh stop
 ```
-It runs outside App Lab's containers, from the files the test already downloaded to `/home`: nothing is
-copied to the small root disk, and App Lab's LLM container limit doesn't apply. It uses the smallest photo
+It runs outside App Lab's containers, from the files the test already downloaded to `~/gemma-spike`:
+nothing is copied, and App Lab's LLM container limit doesn't apply. `SMALL_PHOTO=1` first downloads
+ggml-org's 0.56 GB photo part, which needs about 0.4 GB less memory than Google's 0.99 GB one (tested with
+Google's QAT model: same verdicts on both test drawings). Old prompts kept for reuse are capped at 256 MB. It uses the smallest photo
 part in `~/gemma-spike` (`VISION=0` for text only), and one conversation slot so the unchanged start of
 each prompt is reused. The Garden Steward app finds it by itself. Run it again after a reboot.
 
