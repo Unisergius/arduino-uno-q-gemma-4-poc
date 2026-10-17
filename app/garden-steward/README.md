@@ -80,9 +80,18 @@ minutes), or sooner when a zone gets very dry.
    That copies Gemma 4 E2B to where App Lab's LLM brick finds it.
    (Arduino lists Gemma 4 E2B officially only for the VENTUNO Q. VERIFY that App Lab's runner serves it
    on the UNO Q. Plan B: start `llama-server` yourself as in the spike, and set `LLM_BASE_URL` in `python/config.py`.)
-2. In **App Lab**, create a new app and copy in `app.yaml`, `sketch/`, `python/` and `assets/` from this folder.
+2. **Import the app into App Lab:** download
+   [`dist/garden-steward-applab.zip`](https://github.com/Unisergius/arduino-uno-q-gemma-4-poc/raw/main/dist/garden-steward-applab.zip)
+   and use App Lab's **import** to add it (the zip has `garden-steward/app.yaml` at the top, the layout App Lab expects).
+   Without import: create a new app and copy in `app.yaml`, `sketch/`, `python/` and `assets/` by hand.
 3. Press **Run**. App Lab compiles the sketch, starts the LLM brick, and starts the Python side.
 4. On your phone (same Wi‑Fi), open `http://<UNO-Q-IP>:7000`.
+5. **With App Lab's Agentic Mode** (App Lab 0.10+): open it and paste
+   > Read AGENTS.md in this app first. Then run the app and go through its "First run on the board" checklist
+   > with me one step at a time. Explain each error in plain words before changing code, and never change
+   > the safety limits or suggest 5 V on the analog pins.
+
+After changing files in this folder, rebuild the zip: `python3 tools/make_applab_zip.py` (a test checks it is up to date).
 
 The sketch compiles for the UNO Q (`arduino:zephyr:unoq`). It was tested with arduino-cli, but not yet on a board.
 

@@ -455,3 +455,24 @@ def test_state_is_json_ready(tmp_path):
     assert state["time"] == "Day 1 06:00"
     assert set(state["garden"]["moisture"]) == {"1", "2"}
     assert steward.handle({"type": "nope"})["ok"] is False
+
+
+def test_applab_zip_matches_the_app():
+    import importlib.util
+    import os
+    import zipfile
+
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    zip_path = os.path.join(root, "dist", "garden-steward-applab.zip")
+    if not os.path.exists(zip_path):
+        pytest.skip("no App Lab zip built")
+    spec = importlib.util.spec_from_file_location("make_applab_zip", os.path.join(root, "tools", "make_applab_zip.py"))
+    maker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(maker)
+    expected = {}
+    for path, arcname in maker.app_files():
+        with open(path, "rb") as f:
+            expected[arcname] = f.read()
+    with zipfile.ZipFile(zip_path) as archive:
+        actual = {name: archive.read(name) for name in archive.namelist()}
+    assert actual == expected, "dist/garden-steward-applab.zip is out of date: run python3 tools/make_applab_zip.py"
