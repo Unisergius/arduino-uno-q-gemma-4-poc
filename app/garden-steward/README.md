@@ -80,8 +80,15 @@ Open http://localhost:7000 (or `http://<laptop-ip>:7000` on your phone, same Wiâ
 - `--no-bench` turns the sliders off: then the soil dries out by itself and you use the scenario buttons.
 
 To run Gemma on a laptop:
-`llama-server -m gemma-4-E2B_q4_0-it.gguf --mmproj gemma-4-E2B-it-mmproj.gguf --alias gemma-4-E2B_q4_0-it --reasoning off --reasoning-budget 0 --port 8080`
-(the model files: https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf).
+1. Get llama.cpp: on a Mac `brew install llama.cpp`; otherwise download the build for your computer from
+   https://github.com/ggml-org/llama.cpp/releases (Linux: `llama-<version>-bin-ubuntu-x64.tar.gz`).
+2. Download the two model files (4.3 GB together) from https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf:
+   `gemma-4-E2B_q4_0-it.gguf` and `gemma-4-E2B-it-mmproj.gguf`.
+3. Start it, then start `python3 laptop.py` (without `--no-llm`) in a second terminal:
+   `llama-server -m gemma-4-E2B_q4_0-it.gguf --mmproj gemma-4-E2B-it-mmproj.gguf --alias gemma-4-E2B_q4_0-it --reasoning off --reasoning-budget 0 --port 8080`
+
+Tested on a 4-core laptop CPU: a decision takes ~8 s, a photo check ~12â€“14 s. Both test drawings were
+judged correctly every time (healthy 3/3, sick 3/3).
 
 ## 5. Demo script (for the presentation)
 

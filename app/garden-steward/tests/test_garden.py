@@ -389,6 +389,16 @@ def test_snap_without_camera_shows_gemma_the_picked_test_drawing(tmp_path, monke
     assert steward.log[-1]["test_photo"] == "sick"
 
 
+def test_cut_off_photo_descriptions_end_cleanly():
+    # Real Gemma 4 E2B output, stopped by the 120-character limit in the middle of a sentence.
+    healthy = "The tomato plant (Zone 1) has green leaves that stand upright. The lettuce plant (Zone 2) has green, ruffled leaves that"
+    sick = "Zone 1 (tomatoes) has elongated, somewhat oval leaves that are predominantly brown/yellow with some darker markings. The"
+    assert brain.tidy_cut(healthy, 120) == "The tomato plant (Zone 1) has green leaves that stand upright."
+    assert brain.tidy_cut(sick, 120).endswith("with some darker markings.")
+    assert brain.tidy_cut("Green and upright.", 120) == "Green and upright."
+    assert brain.tidy_cut("x" * 10 + " yellow leaves with brown spots all over the" + " y" * 40, 120).endswith("…")
+
+
 def test_unknown_test_drawing_is_refused(tmp_path):
     steward, _, _ = steward_with({}, tmp_path)
     assert steward.handle({"type": "test_photo", "value": "cactus"})["ok"] is False

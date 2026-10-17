@@ -205,7 +205,20 @@ def decide(summary, summary_text, llm, zones=config.ZONES):
 def check_photo(image_b64, llm, image_mime="image/jpeg"):
     text, info = llm.chat(SEE_PROMPT, "How do these plants look?", schema=SEE_SCHEMA,
                           max_tokens=80, image_b64=image_b64, image_mime=image_mime, temperature=0)
-    return json.loads(text), info
+    verdict = json.loads(text)
+    verdict["leaves"] = tidy_cut(verdict["leaves"], SEE_SCHEMA["properties"]["leaves"]["maxLength"])
+    return verdict, info
+
+
+def tidy_cut(text, limit):
+    """The schema stops Gemma mid-sentence at `limit` characters: keep whole sentences, or whole words + "…"."""
+    text = text.strip()
+    if len(text) < limit - 1:
+        return text
+    end = text.rfind(". ")
+    if end > limit // 3:
+        return text[: end + 1]
+    return text.rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
 # --- Job 3: Explain -----------------------------------------------------------------

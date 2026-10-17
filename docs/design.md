@@ -217,5 +217,6 @@ The real Gemma 4 E2B (`google/gemma-4-E2B-it-qat-q4_0-gguf`) in llama.cpp, with 
 - **Numbers:** it misread "33 %" as "below 25 %". Python now labels each zone (VERY DRY / below target /
   in target range) and adds rain to every zone's line. It then followed the rules in 13 of 14 checks.
 - **Vision:** it reliably flags yellow/brown drawings, not green drooping ones, so sick plants get coloured.
+  The built-in test drawings were judged correctly every time (healthy 3/3, sick 3/3, ~12–14 s each).
 
 The code is in [`app/garden-steward/`](../app/garden-steward/README.md) and the Phase 0 test in [`spike/`](../spike/README.md).
