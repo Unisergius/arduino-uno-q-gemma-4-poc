@@ -44,13 +44,27 @@ board, how much memory it needs, and whether one real garden decision comes back
 For comparison: on a 4-core x86 cloud machine the same decision took about 8 s (16 tok/s).
 Google measured about 8 tok/s on a Raspberry Pi 5. We expect roughly 2–4 tok/s on the UNO Q.
 
+## Which Gemma 4 file it uses
+The script checks the free disk first and takes the biggest Gemma 4 E2B that fits (it says which):
+
+| Size | Files | Disk |
+|---|---|---|
+| `full` | Google's QAT Q4_0 (the file Arduino ships for the VENTUNO Q) + its photo part | 4.3 GB |
+| `q4` | ggml-org Q4_0 + a smaller (Q8_0) photo part | 3.4 GB |
+| `small` | unsloth Q3_K_M + the smaller photo part | 3.1 GB |
+| `tiny` | unsloth UD-Q2_K_XL + the smaller photo part | 3.0 GB |
+
+Smaller = a little less accurate, and less memory. The photo test uses the app's "sick" test drawing
+unless you pass `PHOTO=...`; the right answer is "sick".
+
 ## If it is too slow or too big
-The model file is 3.35 GB and the vision part 0.99 GB, on a board with 4 GB of memory, so **memory is
-the biggest risk**. Try these in order:
-- Text only, without the 1 GB vision part: `VISION=0 bash spike/run_spike.sh`.
-- A smaller file (lower precision, slightly less smart), e.g. 2.5 GB:
-  `MODEL_URL=https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q3_K_M.gguf bash spike/run_spike.sh`
-  (even smaller: `gemma-4-E2B-it-UD-Q2_K_XL.gguf`, 2.4 GB). The script prints the `LLM_MODEL` name to put in `config.py`.
+- Out of memory, or no size fits the disk: `VISION=0 bash spike/run_spike.sh` (text only, 0.6–1 GB less).
+- Force a smaller size: `MODEL=small bash spike/run_spike.sh` (or `tiny`).
 - Try fewer or more threads: `THREADS=3 bash spike/run_spike.sh`.
-- Use Gemma 3 1B (officially supported on the UNO Q) for the "Decide" job only.
-- Keep Gemma 4 for the photo check, which only runs when you press the button.
+- Last resort: Gemma 3 1B (App Lab offers it on the UNO Q) for the "Decide" job only.
+
+## App Lab and Gemma 4
+App Lab's model list offers Gemma 4 only on the VENTUNO Q, but its llama.cpp runner serves **every `.gguf`
+file in its models folder**, named after the file (see `containers/ai/llamacpp-runner` in Arduino's
+`app-bricks-py`). `INSTALL_FOR_APPLAB=1` **moves** the files there (no second copy on the disk) and leaves a
+link behind, and the Garden Steward app picks up whichever Gemma 4 it finds.

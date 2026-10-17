@@ -31,7 +31,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8080/v1")
     parser.add_argument("--model", default="gemma-4-E2B_q4_0-it")
-    parser.add_argument("--photo", help="a JPEG of your (paper) garden")
+    parser.add_argument("--photo", help="a JPEG or PNG of your (paper) garden")
     args = parser.parse_args()
 
     llm = brain.LlmClient(base_url=args.url, model=args.model, timeout=900)
@@ -63,9 +63,10 @@ def main():
         with open(args.photo, "rb") as f:
             image = base64.b64encode(f.read()).decode()
         try:
-            verdict, see = brain.check_photo(image, llm)
+            mime = "image/png" if args.photo.lower().endswith(".png") else "image/jpeg"
+            verdict, see = brain.check_photo(image, llm, mime)
             print()
-            print(f"### Photo check: {verdict} - {see['seconds']} s")
+            print(f"### Photo check ({os.path.basename(args.photo)}): {verdict} - {see['seconds']} s")
         except Exception as error:  # vision part missing, image too big, ...
             print()
             print(f"### Photo check failed: {error}")

@@ -88,6 +88,18 @@ SEE_SCHEMA = {
 }
 
 
+def pick_model(configured, available):
+    """The configured model if the server has it, else any Gemma 4 it serves.
+
+    App Lab's llama.cpp runner names each model after its .gguf file, and the speed test may
+    install a smaller Gemma 4 E2B file when the disk is tight - so the name can differ.
+    """
+    if not available or configured in available:
+        return configured
+    gemma4 = [m for m in available if "gemma-4" in m.lower()]
+    return gemma4[0] if gemma4 else configured
+
+
 class LlmClient:
     """A tiny client for llama.cpp's OpenAI-style /chat/completions endpoint."""
 
@@ -95,9 +107,22 @@ class LlmClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
+        self._model_checked = False
+
+    def _check_model(self):
+        """Once, ask the server which models it has, and switch to its Gemma 4 if the name differs."""
+        try:
+            with urllib.request.urlopen(f"{self.base_url}/models", timeout=10) as response:
+                available = [m["id"] for m in json.load(response).get("data", [])]
+        except Exception:
+            return  # server not up yet: try again next time
+        self.model = pick_model(self.model, available)
+        self._model_checked = True
 
     def chat(self, system, user, schema=None, max_tokens=200, image_b64=None, image_mime="image/jpeg", temperature=0.2):
         """Return (text, info). `info` has timing numbers for the log and the web page."""
+        if not self._model_checked:
+            self._check_model()
         content = user
         if image_b64:
             content = [

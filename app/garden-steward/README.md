@@ -77,9 +77,10 @@ minutes), or sooner when a zone gets very dry.
 ## 3. Run it on the board
 
 1. **Gemma model:** run the Phase 0 spike once (`spike/README.md`) with `INSTALL_FOR_APPLAB=1`.
-   That copies Gemma 4 E2B to where App Lab's LLM brick finds it.
-   (Arduino lists Gemma 4 E2B officially only for the VENTUNO Q. VERIFY that App Lab's runner serves it
-   on the UNO Q. Plan B: start `llama-server` yourself as in the spike, and set `LLM_BASE_URL` in `python/config.py`.)
+   It picks the biggest Gemma 4 E2B that fits the disk and moves it to where App Lab's LLM brick serves it.
+   App Lab's model list only offers Gemma 4 on the VENTUNO Q, but its llama.cpp runner serves any `.gguf` in
+   that folder by file name, and the app finds whichever Gemma 4 is installed. (Plan B: start `llama-server`
+   yourself as in the spike, and set `LLM_BASE_URL` in `python/config.py`.)
 2. **Import the app into App Lab:** download
    [`dist/garden-steward-applab.zip`](https://github.com/Unisergius/arduino-uno-q-gemma-4-poc/raw/main/dist/garden-steward-applab.zip)
    and use App Lab's **import** to add it (the zip has `garden-steward/app.yaml` at the top, the layout App Lab expects).

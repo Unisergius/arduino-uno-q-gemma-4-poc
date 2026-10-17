@@ -399,6 +399,13 @@ def test_cut_off_photo_descriptions_end_cleanly():
     assert brain.tidy_cut("x" * 10 + " yellow leaves with brown spots all over the" + " y" * 40, 120).endswith("…")
 
 
+def test_pick_model_finds_the_installed_gemma_4():
+    assert brain.pick_model("gemma-4-E2B_q4_0-it", ["gemma-4-E2B_q4_0-it", "gemma-3-1b-it-Q4_0"]) == "gemma-4-E2B_q4_0-it"
+    assert brain.pick_model("gemma-4-E2B_q4_0-it", ["Qwen3.5-0.8B-Q4_0", "gemma-4-E2B-it-Q3_K_M"]) == "gemma-4-E2B-it-Q3_K_M"
+    assert brain.pick_model("gemma-4-E2B_q4_0-it", ["gemma-3-1b-it-Q4_0"]) == "gemma-4-E2B_q4_0-it"  # no Gemma 4: keep asking for it
+    assert brain.pick_model("gemma-4-E2B_q4_0-it", []) == "gemma-4-E2B_q4_0-it"
+
+
 def test_unknown_test_drawing_is_refused(tmp_path):
     steward, _, _ = steward_with({}, tmp_path)
     assert steward.handle({"type": "test_photo", "value": "cactus"})["ok"] is False
