@@ -530,3 +530,17 @@ def test_nothing_wired_by_default_so_floating_pins_are_ignored(tmp_path):
     snap = steward.garden.snapshot(clock.now(), steward.real)
     assert snap["sources"]["soil"] == {1: "simulated", 2: "simulated"}
     assert snap["raining"] is False
+
+
+def test_ticking_a_wired_sensor_on_the_web_page(tmp_path):
+    clock, _ = make_clock()
+    mcu = SensorMcu(clock)
+    mcu.raw["a1"] = 0  # soil probe in the air: bone dry
+    steward = Steward(mcu, None, clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    assert steward.state()["wired"] == []
+    assert steward.handle({"type": "wired", "name": "soil", "on": True})["ok"]
+    steward.tick()
+    assert steward.garden.snapshot(clock.now(), steward.real)["sources"]["soil"][2] == "sensor"
+    assert steward.handle({"type": "wired", "name": "soil", "on": False})["ok"]
+    assert steward.handle({"type": "wired", "name": "radar", "on": True})["ok"] is False
+    assert steward.state()["wired"] == []

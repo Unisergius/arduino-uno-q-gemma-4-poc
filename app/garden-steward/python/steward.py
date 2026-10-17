@@ -22,7 +22,7 @@ from stats import History, describe, summarise
 class Steward:
     def __init__(self, mcu, llm, clock=None, garden=None, log_path=config.LOG_PATH, wired=None):
         self.mcu = mcu
-        self.wired = config.WIRED_SENSORS if wired is None else wired  # kit modules actually wired up
+        self.wired = set(config.WIRED_SENSORS if wired is None else wired)  # kit modules actually wired up
         self.llm = llm  # None = Gemma off, fallback rule only
         self.clock = clock or SimClock()
         self.garden = garden or PaperGarden()
@@ -242,6 +242,8 @@ class Steward:
             "test_photo": self.test_photo,
             "test_photos": list(config.TEST_PHOTOS),
             "bench": getattr(self.mcu, "bench", None),  # the laptop test bench's sliders, if any
+            "wired": sorted(self.wired),
+            "all_sensors": list(config.SENSOR_ORDER),
             "answer": self.answer,
             "photo": self.photo,
             "log": [{k: v for k, v in e.items() if k != "prompt"} for e in reversed(self.log)][:40],
@@ -262,6 +264,11 @@ class Steward:
             elif kind == "tank":
                 self.garden.tank_empty = bool(action["empty"])
         if kind in ("scenario", "dry", "battery", "tank"):
+            return {"ok": True}
+        if kind == "wired":  # tick a sensor on the web page once it's plugged in (no code editing)
+            if action.get("name") not in config.ALL_SENSORS:
+                return {"ok": False, "error": f"unknown sensor {action.get('name')!r}"}
+            (self.wired.add if action.get("on") else self.wired.discard)(action["name"])
             return {"ok": True}
         if kind == "auto":  # pause / resume Gemma's automatic decisions
             self.auto_decide = bool(action.get("on"))

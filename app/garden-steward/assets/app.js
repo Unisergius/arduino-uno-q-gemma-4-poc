@@ -93,6 +93,7 @@ function render(s) {
     : "No camera: “Check now” and the yellow button show Gemma the test drawing picked here. Or take a real photo with your phone.";
   renderTestPhotos(s);
   renderBench(s.bench);
+  renderWired(s);
   // "Dry zone" only works for a zone without a sensor: on a sensor zone, turn the knob or slider instead.
   document.querySelectorAll("button[data-action]").forEach((button) => {
     const action = JSON.parse(button.dataset.action);
@@ -118,6 +119,22 @@ function renderTestPhotos(s) {
 $("test-photos").addEventListener("click", (event) => {
   const thumb = event.target.closest(".thumb");
   if (thumb) send({ type: "test_photo", value: thumb.dataset.photo });
+});
+
+// On the board: which kit sensors are really plugged in (A0 knob, A1 soil, A2 temp, A3 light, A4 steam).
+const SENSOR_LABELS = { knob: "Knob (A0)", soil: "Soil probe (A1)", temp: "Temperature (A2)", light: "Light (A3)", steam: "Rain / steam (A4)" };
+function renderWired(s) {
+  $("wired-card").hidden = Boolean(s.bench);  // laptop mode: the test bench stands in for all of them
+  const box = $("wired");
+  if (!box.children.length) {
+    box.innerHTML = s.all_sensors.map((name) =>
+      `<label class="chip"><input type="checkbox" data-sensor="${esc(name)}"> ${esc(SENSOR_LABELS[name] || name)}</label>`).join("");
+  }
+  box.querySelectorAll("input").forEach((input) => { input.checked = s.wired.includes(input.dataset.sensor); });
+}
+$("wired").addEventListener("change", (event) => {
+  const input = event.target.closest("input[data-sensor]");
+  if (input) send({ type: "wired", name: input.dataset.sensor, on: input.checked });
 });
 
 // The laptop test bench: sliders start from the pretend sensors' values, then you move them.

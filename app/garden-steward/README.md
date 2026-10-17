@@ -56,9 +56,15 @@ nothing from the 5 V rail reaches A0–A5.
 **Short on jumpers?** Wire the four that carry the demo first: **knob (A0)**, **relay (D4)**,
 **yellow button (D2)** and **rain (A4)**. Then add temperature, soil probe, light and the LEDs.
 
-**Tell the app what you wired:** add the names to `WIRED_SENSORS` in `python/config.py`
-(`"knob"`, `"soil"`, `"temp"`, `"light"`, `"steam"`). It starts empty, because unwired analog pins read random
-noise; anything not listed is simulated. The relay, the button (the sketch holds D2 low) and the LED matrix
+**Tell the app what you wired:** tick it in the web page's **"Sensors wired to the board"** card (or add the
+names to `WIRED_SENSORS` in `python/config.py` to make it permanent). Nothing is ticked at first, because
+unwired analog pins read random noise; anything not ticked is simulated.
+
+**Just the soil probe** (the one real sensor worth wiring with few cables): signal → **A1**, red → **3.3V**,
+black → **GND** (3 male pins needed; with the board unplugged). Tick "Soil probe (A1)". Zone 2 (lettuce) then
+follows the probe: in a damp tissue it reads moist, pulled out it reads dry. In "Raw sensor readings" note `a1`
+in air and in water and put them in `SOIL_DRY_RAW` / `SOIL_WET_RAW` (if `a1` goes past 1023, the board reads
+12-bit: set `ADC_MAX = 4095`). The relay, the button (the sketch holds D2 low) and the LED matrix
 need no entry.
 
 **Calibrate** (2 minutes): open the web page, expand **"Raw sensor readings"**, and note the knob at both

@@ -26,7 +26,8 @@ PINS = {
 # module only counts once you add it here. Empty = nothing wired: the simulation and the web page's
 # buttons (Dry zone, Heatwave, Rain coming, Check now) stand in for every sensor - the demo still works.
 # The relay (D4), the button (D2) and the LED matrix need no entry. Laptop mode's test bench uses all five.
-ALL_SENSORS = {"knob", "soil", "temp", "light", "steam"}
+SENSOR_ORDER = ("knob", "soil", "temp", "light", "steam")  # on pins A0..A4
+ALL_SENSORS = set(SENSOR_ORDER)
 WIRED_SENSORS = set()  # e.g. {"knob", "steam"}
 
 # Turning raw analog readings (0..ADC_MAX) into numbers. Calibrate with the
