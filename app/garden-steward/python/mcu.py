@@ -40,18 +40,52 @@ class SafetyRules:
         return True, seconds, note
 
 
-class FakeMcu:
-    """Pretends to be the sketch: no sensors (everything is simulated) and an imaginary pump."""
+# The test bench's starting values: what the pretend sensors read before you touch a slider.
+BENCH_START = {"knob": 60, "soil": 55, "temp_c": 22, "light": 70, "raining": False}
 
-    def __init__(self, clock):
+
+class FakeMcu:
+    """Pretends to be the sketch, with an imaginary pump.
+
+    bench=False: no sensors at all, the simulation makes everything up.
+    bench=True:  the "test bench" - sliders on the web page stand in for the knob, soil probe, LM35,
+                 light and steam sensors and the yellow button. They are turned into the same raw
+                 readings the sketch sends, so the real conversion code (sensors.py) is exercised.
+    """
+
+    def __init__(self, clock, bench=False):
         self.clock = clock
         self.rules = SafetyRules()
         self.battery = 100
         self.tank_empty = False
         self.icon = "ok"
+        self.bench = dict(BENCH_START) if bench else None
+        self.button_presses = 0
 
     def read_sensors(self):
-        return {}
+        if self.bench is None:
+            return {}
+        b = self.bench
+        return {
+            "a0": _raw(b["knob"], config.KNOB_DRY_RAW, config.KNOB_WET_RAW),
+            "a1": _raw(b["soil"], config.SOIL_DRY_RAW, config.SOIL_WET_RAW),
+            "a2": round(b["temp_c"] / 100 / config.ADC_VREF * config.ADC_MAX),  # LM35: 10 mV per °C
+            "a3": _raw(b["light"], config.LIGHT_DARK_RAW, config.LIGHT_BRIGHT_RAW),
+            "a4": config.STEAM_WET_RAW + 200 if b["raining"] else 0,
+            "button": self.button_presses,
+        }
+
+    def set_bench(self, name, value):
+        if self.bench is None:
+            raise RuntimeError("no test bench (start laptop.py without --no-bench)")
+        if name not in self.bench:
+            raise ValueError(f"unknown bench sensor {name!r}")
+        self.bench[name] = bool(value) if name == "raining" else float(value)
+
+    def press_button(self):
+        if self.bench is None:
+            raise RuntimeError("no test bench (start laptop.py without --no-bench)")
+        self.button_presses += 1
 
     def set_sim_state(self, battery, tank_empty):
         self.battery, self.tank_empty = battery, tank_empty
@@ -64,6 +98,11 @@ class FakeMcu:
 
     def show(self, icon):
         self.icon = icon
+
+
+def _raw(percent, raw_at_0, raw_at_100):
+    """The analog reading a sensor would give at this percentage (the reverse of sensors.to_percent)."""
+    return round(raw_at_0 + (raw_at_100 - raw_at_0) * percent / 100)
 
 
 class BridgeMcu:

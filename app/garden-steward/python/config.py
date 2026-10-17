@@ -64,9 +64,15 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://llamacpp-models-runner:9999/v1"
 LLM_MODEL = os.getenv("LLM_MODEL", "gemma-4-E2B_q4_0-it")
 LLM_TIMEOUT_S = int(os.getenv("LLM_TIMEOUT_S", "300"))
 
-# The Seeed reCamera's video stream. Empty = no camera, use the phone upload on the web page.
-# VERIFY the path on your reCamera (its web page / Node-RED on port 1880 shows the RTSP settings).
+# Optional: a Seeed reCamera's video stream. Empty = no camera (the normal case now):
+# "Check now" and the yellow button then use the test drawing picked on the web page,
+# and you can always take a real photo of the paper garden with your phone on the web page.
+# VERIFY the path on a reCamera (its web page / Node-RED on port 1880 shows the RTSP settings).
 RECAMERA_URL = os.getenv("RECAMERA_URL", "")  # e.g. "rtsp://192.168.1.60:554/live"
+
+# Built-in test drawings of the paper garden (assets/test-photos/<name>.png), for testing without a camera.
+TEST_PHOTO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "test-photos")
+TEST_PHOTOS = ("healthy", "sick")
 
 # Where the decision log is written (one JSON object per line).
 LOG_PATH = os.getenv("LOG_PATH", "garden_log.jsonl")

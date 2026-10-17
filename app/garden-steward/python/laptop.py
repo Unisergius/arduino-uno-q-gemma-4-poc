@@ -1,7 +1,12 @@
-"""Run the Garden Steward on a laptop: a pretend MCU instead of the board, same web page.
+"""The test environment: run the Garden Steward on a laptop, with no board and no camera.
+
+A pretend MCU (same safety rules) replaces the board, and the web page gets a "test bench":
+sliders for the knob, soil probe, temperature, light and rain sensor, and the yellow button.
+With no camera, "Check now" shows Gemma one of the built-in test drawings.
 
     python laptop.py                      # Gemma via llama-server on http://localhost:8080/v1
     python laptop.py --no-llm             # no Gemma: only the fallback rule
+    python laptop.py --no-bench           # no pretend sensors: the soil dries out by itself
     python laptop.py --llm-url http://192.168.1.50:9999/v1   # Gemma running on the UNO Q
 """
 
@@ -59,11 +64,12 @@ def main():
     parser.add_argument("--llm-url", default=os.getenv("LLM_BASE_URL", "http://localhost:8080/v1"))
     parser.add_argument("--model", default=config.LLM_MODEL)
     parser.add_argument("--no-llm", action="store_true", help="run without Gemma (fallback rule only)")
+    parser.add_argument("--no-bench", action="store_true", help="no pretend sensors: everything is simulated")
     args = parser.parse_args()
 
     clock = SimClock()
     llm = None if args.no_llm else LlmClient(base_url=args.llm_url, model=args.model)
-    steward = Steward(FakeMcu(clock), llm, clock=clock)
+    steward = Steward(FakeMcu(clock, bench=not args.no_bench), llm, clock=clock)
 
     server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(steward))
     threading.Thread(target=server.serve_forever, daemon=True).start()

@@ -20,6 +20,20 @@
       <div id="weather" class="chips"></div>
     </section>
 
+    <section class="card" id="bench" hidden>
+      <h2>Test bench <span class="small">laptop only: these stand in for the sensors on the board</span></h2>
+      <label class="slider">Zone 1 knob (tomatoes soil) <output></output>
+        <input type="range" min="0" max="100" step="1" data-bench="knob" data-unit=" %"></label>
+      <label class="slider">Zone 2 soil probe (lettuce) <output></output>
+        <input type="range" min="0" max="100" step="1" data-bench="soil" data-unit=" %"></label>
+      <label class="slider">Temperature sensor <output></output>
+        <input type="range" min="0" max="45" step="1" data-bench="temp_c" data-unit=" °C"></label>
+      <label class="slider">Light sensor <output></output>
+        <input type="range" min="0" max="100" step="1" data-bench="light" data-unit=" %"></label>
+      <label class="toggle"><input type="checkbox" data-bench="raining"> Wet fingertip on the rain sensor</label>
+      <div class="buttons"><button id="bench-button">🟡 Press the yellow button</button></div>
+    </section>
+
     <section class="card">
       <h2>Make something happen</h2>
       <div class="buttons">
@@ -37,7 +51,7 @@
       </div>
       <div class="buttons">
         <button class="primary" data-action='{"type":"decide"}'>🧠 Ask Gemma to decide now</button>
-        <button data-action='{"type":"check"}'>📸 Check now (camera + decide)</button>
+        <button data-action='{"type":"check"}'>📸 Check now (photo + decide)</button>
         <button class="danger" data-action='{"type":"water","zone":1,"seconds":600}'>💦 Force: water zone 1 for 10 min</button>
         <button data-action='{"type":"journal"}'>📓 Write journal</button>
       </div>
@@ -55,7 +69,8 @@
     <section class="card">
       <h2>Check the plants (photo)</h2>
       <p class="small" id="camera-status"></p>
-      <label class="upload">📷 Or take / choose a photo with your phone
+      <div id="test-photos" class="thumbs"></div>
+      <label class="upload">📷 Take or choose a real photo with your phone
         <input id="photo" type="file" accept="image/*" capture="environment">
       </label>
       <p id="photo-result" class="muted">Gemma looks at the picture and says if the plants look healthy.</p>

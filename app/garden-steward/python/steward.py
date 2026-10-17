@@ -35,6 +35,7 @@ class Steward:
         self.pump_until = 0.0
         self.answer = None
         self.photo = None
+        self.test_photo = config.TEST_PHOTOS[0]  # the drawing the pretend camera "sees" when there is no camera
         self.raw = {}   # raw readings from the MCU (for calibrating)
         self.real = {}  # the same, converted (see sensors.py); empty without sensors
         self.last_button = None
@@ -143,9 +144,14 @@ class Steward:
         self.jobs.put(("decide", None))
 
     def _job_snap(self, _):
-        """Grab a frame from the reCamera, then let Gemma look at it."""
+        """Grab a frame from the reCamera - or, with no camera, use the test drawing picked on the web page."""
         self._show("think")
-        self._job_photo({"image_b64": camera.grab_jpeg_b64(config.RECAMERA_URL), "mime": "image/jpeg"})
+        if config.RECAMERA_URL:
+            photo = {"image_b64": camera.grab_jpeg_b64(config.RECAMERA_URL), "mime": "image/jpeg"}
+        else:
+            photo = {"image_b64": camera.test_photo_b64(self.test_photo), "mime": "image/png",
+                     "test_photo": self.test_photo}
+        self._job_photo(photo)
 
     def _job_photo(self, payload):
         if self.llm is None:
@@ -154,7 +160,7 @@ class Steward:
         verdict, info = brain.check_photo(payload["image_b64"], self.llm, payload.get("mime", "image/jpeg"))
         self.photo = {**verdict, "llm": info}
         self._write_log("see", status=verdict["status"], issue=verdict["leaves"],
-                        confidence=verdict["confidence"], llm=info)
+                        confidence=verdict["confidence"], test_photo=payload.get("test_photo"), llm=info)
         self._show("ok" if verdict["status"] == "healthy" else "alert")
 
     def _job_journal(self, _):
@@ -230,6 +236,9 @@ class Steward:
             "gemma": "off" if self.llm is None else f"{self.llm.model} @ {self.llm.base_url}",
             "raw_sensors": self.raw,
             "camera": config.RECAMERA_URL or None,
+            "test_photo": self.test_photo,
+            "test_photos": list(config.TEST_PHOTOS),
+            "bench": getattr(self.mcu, "bench", None),  # the laptop test bench's sliders, if any
             "answer": self.answer,
             "photo": self.photo,
             "log": [{k: v for k, v in e.items() if k != "prompt"} for e in reversed(self.log)][:40],
@@ -250,6 +259,22 @@ class Steward:
             elif kind == "tank":
                 self.garden.tank_empty = bool(action["empty"])
         if kind in ("scenario", "dry", "battery", "tank"):
+            return {"ok": True}
+        if kind == "test_photo":  # which drawing the pretend camera "sees"
+            if action.get("value") not in config.TEST_PHOTOS:
+                return {"ok": False, "error": f"unknown test photo {action.get('value')!r}"}
+            self.test_photo = action["value"]
+            return {"ok": True}
+        if kind in ("bench", "button"):  # laptop test bench: sliders and the yellow button
+            if getattr(self.mcu, "bench", None) is None:
+                return {"ok": False, "error": "no test bench here - it only exists in laptop mode"}
+            try:
+                if kind == "bench":
+                    self.mcu.set_bench(action["name"], action["value"])
+                else:
+                    self.mcu.press_button()
+            except (ValueError, KeyError) as error:
+                return {"ok": False, "error": str(error)}
             return {"ok": True}
         if kind == "decide":
             self.last_decision_h = self.clock.hours()

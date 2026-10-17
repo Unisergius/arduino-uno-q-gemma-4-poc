@@ -120,7 +120,7 @@ No water and no plants needed. **The brain is real; only the garden is pretended
 | Soil moisture | capacitive soil sensors | Zone 1: **a knob** you turn to "dry" the soil. Zone 2: **a real soil probe** in a damp tissue. Both get a simulated "watering bonus" when the MCU accepts a watering |
 | Pump | 12 V pump via relay/MOSFET | **relay click** + water-drop animation on the LED matrix |
 | Weather | temp/humidity/pressure sensor | **real** temperature (LM35), light and rain (steam sensor) readings; the pressure forecast comes from **scenario buttons** (Normal, Heatwave, Rain coming) |
-| Plants | real plants + camera | **drawings on paper**, photographed by the **Seeed reCamera** (phone upload as fallback) |
+| Plants | real plants + camera | **drawings on paper**, photographed with a **phone** on the web page, or the built-in **test drawings** (healthy / sick) |
 | Battery / solar | solar panel + LiFePO4 | simulated battery level |
 | Gemma, Bridge, safety rules, log, web page | ✅ real | ✅ **real – identical code** |
 
@@ -132,8 +132,8 @@ No water and no plants needed. **The brain is real; only the garden is pretended
    water. The relay clicks, the matrix shows drops and the log shows the reason.
 3. **Touch the rain sensor with a wet fingertip** (or press "Rain coming"). Gemma skips watering and says why.
 4. **Try to overwater it:** ask "water zone 1 for 10 minutes". The **MCU refuses** with a safety limit.
-5. **Swap a drawing:** a green plant becomes a yellow, drooping one. Press the yellow button; the reCamera
-   takes a photo and Gemma flags it.
+5. **Sick plant:** pick the "sick" test drawing (or photograph a yellow/brown paper drawing with the phone)
+   and press the yellow button. Gemma flags it.
 6. **Ask a question:** "How's the lettuce doing?" Gemma answers from the log.
 
 ## 6. Power budget (real deployment – estimates, to be measured in Phase 0)
@@ -150,7 +150,7 @@ No water and no plants needed. **The brain is real; only the garden is pretended
 Rough sizing: **3 days without sun** ≈ 150 Wh usable, so a **12 V 20 Ah LiFePO4** (~256 Wh)
 plus a **30–50 W panel** and an MPPT charge controller.
 
-### Wiring: your parts (DFRobot Gravity kit KIT0011 + Seeed reCamera)
+### Wiring: your parts (DFRobot Gravity kit KIT0011)
 
 The UNO Q's pins are **3.3 V logic**. A0/A1 are **not** 5 V tolerant, analog inputs top out around 3.3 V, and D3 is avoided.
 Each Gravity module has 3 wires: **signal**, **VCC** (red), **GND** (black).
@@ -167,17 +167,20 @@ Each Gravity module has 3 wires: **signal**, **VCC** (red), **GND** (black).
 | D5 | Blue LED module (optional) | "water flowing" | 3.3 V |
 | D6 | Red LED module (optional) | alert | 3.3 V |
 
-**Seeed reCamera:** a separate camera with its own small Linux computer. It joins the same local Wi-Fi.
-The Garden Steward grabs one frame from its video stream (`rtsp://<reCamera-ip>:554/live`, to verify on the device).
+**No camera:** the photo comes from the phone (the web page opens its camera) or from the built-in test
+drawings. A Seeed reCamera on the same Wi‑Fi is supported but optional.
 **Cables:** if the Gravity cables end in plugs that don't fit the UNO Q's female headers, use male-to-male
 jumper wires or a DFRobot Gravity IO expansion shield.
 
 ## 7. Parts
 
-**Paper Garden (what we have):** UNO Q 4 GB, USB‑C cables and power supply, the DFRobot Gravity
-27‑piece sensor kit (see the wiring table above), a Seeed reCamera, paper and pens.
-A USB webcam would need a USB‑C hub with power delivery (the UNO Q has a single USB‑C port), which is why the
-reCamera over Wi‑Fi is the better fit.
+**Paper Garden (what we have):** one UNO Q 4 GB (shared material), USB‑C cable and power supply, the
+DFRobot Gravity 27‑piece sensor kit (see the wiring table above), paper, pens and a phone.
+No camera: a USB webcam would also need a USB‑C hub with power delivery (the UNO Q has a single USB‑C port).
+
+**Test environment (no board, no camera):** `python3 app/garden-steward/python/laptop.py` runs everything on a
+laptop. A test bench on the web page stands in for the sensors and the yellow button, and built-in test
+drawings stand in for the camera. See the app README, section 4.
 
 **Real garden (later):** capacitive soil sensors (I²C/Qwiic), 12 V pump or valve + relay/MOSFET,
 float switch for the tank, a **real-time clock module** (no internet means no clock sync),
@@ -192,7 +195,7 @@ converter, IP65 box with cable glands.
 | E2B RAM with App Lab running | 3.35 GB model + 0.99 GB vision on 4 GB shared with Debian; App Lab's LLM container is capped at 2.5 GB | `VISION=0`, a 2.4–2.5 GB quantization, llama.cpp outside App Lab, or LiteRT‑LM |
 | Arduino lists Gemma 4 E2B only for the VENTUNO Q | App Lab's LLM brick may not serve it on the UNO Q | run `llama-server` ourselves (`LLM_BASE_URL`) |
 | Gemma 4 vision on the board | the "See" job (works in llama.cpp on a laptop: spots yellow/brown, not droopy shapes) | phone upload, or drop vision from the POC |
-| Board as Wi-Fi hotspot | phone and reCamera without internet | the reCamera's own hotspot, or LED matrix only |
+| Board as Wi-Fi hotspot | the phone without internet | a laptop/phone hotspot with no uplink, or LED matrix only |
 | Real power draw | solar sizing | bigger battery/panel |
 
 ## 9. Plan

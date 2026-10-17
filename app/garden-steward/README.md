@@ -21,7 +21,7 @@ so power those sensors from **3.3 V**. **Don't use D3.** Each Gravity module has
 | A2 | LM35 temperature DFR0023 | real temperature (pinch it for a "heatwave") | 5 V is ok (output only ~0.25 V) |
 | A3 | Ambient Light Sensor | real light (cover it for "night") | 3.3 V |
 | A4 | Steam Sensor | "raining now": touch it with a wet fingertip | 3.3 V |
-| D2 | Push button (yellow) | "check now": the reCamera takes a photo, then Gemma decides | 3.3 V |
+| D2 | Push button (yellow) | "check now": a photo (test drawing or camera), then Gemma decides | 3.3 V |
 | D4 | Relay Module DFR0017 | the "pump": it clicks | 5 V (VERIFY: does the 3.3 V signal switch it?) |
 | D5 | Blue LED module (optional) | water flowing | 3.3 V |
 | D6 | Red LED module (optional) | alert | 3.3 V |
@@ -33,9 +33,10 @@ simulation fills in for it. Floating pins read random noise.
 ends and the soil probe dry and in the damp tissue. Put those numbers in `python/config.py`
 (`KNOB_DRY_RAW`, `SOIL_WET_RAW`, …).
 
-**Seeed reCamera:** connect it to the same Wi‑Fi, find its IP address, and set
-`RECAMERA_URL = "rtsp://<reCamera-ip>:554/live"` in `python/config.py`. VERIFY the exact stream path in
-the reCamera's own web page / Node‑RED (port 1880). With no camera set, use the phone upload on the web page.
+**No camera needed.** With `RECAMERA_URL` empty (the default), "Check now" and the yellow button show Gemma
+the **test drawing** picked on the web page (`assets/test-photos/healthy.png` or `sick.png`), and the
+**phone upload** takes a real photo of your paper garden. (Optional: a Seeed reCamera on the same Wi‑Fi,
+`RECAMERA_URL = "rtsp://<reCamera-ip>:554/live"`, VERIFY the path on the device.)
 
 ## 2. What is real and what is pretend
 
@@ -59,16 +60,26 @@ minutes), or sooner when a zone gets very dry.
 
 The sketch compiles for the UNO Q (`arduino:zephyr:unoq`). It was tested with arduino-cli, but not yet on a board.
 
-## 4. Run it on a laptop (no board)
+## 4. Test environment: a laptop, no board, no camera
 
-Everything simulated, same web page. Python 3.10+, no extra packages:
+Rehearse the whole demo before you get the board. Python 3.10+ and nothing else:
 
 ```bash
-cd python
-python3 laptop.py --no-llm                          # without Gemma: the simple fallback rule only
-python3 laptop.py --llm-url http://localhost:8080/v1  # with Gemma via a local llama-server
+cd app/garden-steward/python
+python3 laptop.py --no-llm     # quickest: no Gemma, the simple fallback rule decides
+python3 laptop.py              # with Gemma: needs llama-server running (below)
 ```
-Then open http://localhost:7000. To run Gemma on a laptop:
+Open http://localhost:7000 (or `http://<laptop-ip>:7000` on your phone, same Wi‑Fi).
+
+- **Test bench card** (laptop only): sliders stand in for the **knob**, **soil probe**, **temperature**
+  and **light** sensors, a checkbox for the **wet fingertip on the rain sensor**, and a button for the
+  **yellow button**. They go through the same code as the real sensors, so the demo works the same way.
+- **Test drawings:** click **healthy** or **sick** in the photo card. That is what the pretend camera
+  "sees" when you press **Check now** or the yellow button.
+- **The microcontroller** is a Python stand-in with the **same safety limits** (60 s cap, 4 h gap, 3 a day).
+- `--no-bench` turns the sliders off: then the soil dries out by itself and you use the scenario buttons.
+
+To run Gemma on a laptop:
 `llama-server -m gemma-4-E2B_q4_0-it.gguf --mmproj gemma-4-E2B-it-mmproj.gguf --alias gemma-4-E2B_q4_0-it --reasoning off --reasoning-budget 0 --port 8080`
 (the model files: https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf).
 
@@ -80,8 +91,9 @@ Then open http://localhost:7000. To run Gemma on a laptop:
 3. **Touch the steam sensor with a wet fingertip** (or press **Rain coming**). Gemma waits and says it is raining.
 4. **Try to overwater:** ask "water zone 1 for 10 minutes" (or press **Force**). The MCU clamps it to 60 s,
    or refuses with "minimum is 4 h" if zone 1 was watered in the last 4 simulated hours. Either way, the MCU has the last word.
-5. **Swap a drawing** for a **yellow/brown** plant and press the **yellow button**. The reCamera takes a photo
-   and Gemma flags it. Tip: Gemma reads **colour** reliably; it does not notice drooping shapes.
+5. **Sick plant:** pick the **sick** test drawing (or photograph your own paper drawing with the phone)
+   and press the **yellow button**. Gemma flags it. Tip: Gemma reads **colour** reliably, not drooping
+   shapes, so colour sick leaves **yellow/brown** (a highlighter or marker; blue pen alone won't do).
 6. **Ask** "How's the lettuce doing?" Gemma answers from the log.
 
 ## 6. How Gemma is used (short version)

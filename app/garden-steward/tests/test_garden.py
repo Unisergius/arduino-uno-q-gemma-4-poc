@@ -379,13 +379,63 @@ def test_knob_turned_to_dry_reaches_gemma(tmp_path):
     assert steward.garden.soil(1, steward.real) == pytest.approx(9.8 + config.WATERING_BONUS)
 
 
-def test_snap_without_camera_is_logged_and_does_not_crash(tmp_path, monkeypatch):
+def test_snap_without_camera_shows_gemma_the_picked_test_drawing(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "RECAMERA_URL", "")
+    steward, llm, _ = steward_with({"leaves": "yellow and brown", "status": "sick", "confidence": "high"}, tmp_path)
+    assert steward.handle({"type": "test_photo", "value": "sick"})["ok"]
+    steward._job_snap(None)
+    assert llm.prompts, "Gemma was asked to look"
+    assert steward.photo["status"] == "sick"
+    assert steward.log[-1]["test_photo"] == "sick"
+
+
+def test_unknown_test_drawing_is_refused(tmp_path):
     steward, _, _ = steward_with({}, tmp_path)
-    steward.jobs.put(("snap", None))
-    kind, payload = steward.jobs.get_nowait()
-    with pytest.raises(RuntimeError, match="no camera configured"):
-        getattr(steward, f"_job_{kind}")(payload)
+    assert steward.handle({"type": "test_photo", "value": "cactus"})["ok"] is False
+    assert steward.test_photo == "healthy"
+
+
+def test_every_test_drawing_exists():
+    import camera
+
+    for name in config.TEST_PHOTOS:
+        assert len(camera.test_photo_b64(name)) > 1000
+
+
+# --- the laptop test bench ------------------------------------------------------------------
+
+
+def test_bench_sliders_go_through_the_real_sensor_code():
+    clock, _ = make_clock()
+    mcu = FakeMcu(clock, bench=True)
+    for name, value in {"knob": 20, "soil": 80, "temp_c": 31, "light": 50, "raining": True}.items():
+        mcu.set_bench(name, value)
+    real = sensors.convert(mcu.read_sensors())
+    assert real["soil"] == {1: pytest.approx(20, abs=0.5), 2: pytest.approx(80, abs=0.5)}
+    assert real["temp_c"] == pytest.approx(31, abs=0.5)
+    assert real["light"] == pytest.approx(50, abs=0.5)
+    assert real["raining"] is True
+
+
+def test_bench_yellow_button_takes_a_photo_and_decides(tmp_path):
+    clock, _ = make_clock()
+    steward = Steward(FakeMcu(clock, bench=True), StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward.tick()
+    while not steward.jobs.empty():
+        steward.jobs.get_nowait()  # drop the first scheduled decision
+    assert steward.handle({"type": "button"})["ok"]
+    steward.tick()
+    assert [steward.jobs.get_nowait()[0] for _ in range(2)] == ["snap", "decide"]
+
+
+def test_bench_actions_need_a_bench(tmp_path):
+    steward, _, _ = steward_with({}, tmp_path)  # FakeMcu without a bench, like the board
+    assert steward.handle({"type": "bench", "name": "knob", "value": 10})["ok"] is False
+    assert steward.handle({"type": "button"})["ok"] is False
+    clock, _ = make_clock()
+    bench = Steward(FakeMcu(clock, bench=True), None, clock=clock, log_path=str(tmp_path / "b.jsonl"))
+    assert bench.handle({"type": "bench", "name": "humidity", "value": 10})["ok"] is False
+    assert bench.state()["bench"]["knob"] == 60
 
 
 def test_state_is_json_ready(tmp_path):

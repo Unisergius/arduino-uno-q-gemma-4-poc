@@ -1,12 +1,24 @@
-"""Grab one photo from the Seeed reCamera's video stream (RTSP).
+"""Where the plant photo comes from: a built-in test drawing, or a Seeed reCamera's video stream (RTSP).
 
-On the board we use App Lab's own camera helper (OpenCV underneath).
-On a laptop we fall back to the `ffmpeg` command, if it is installed.
+With no camera, test_photo_b64() hands Gemma one of the drawings in assets/test-photos/.
+With a reCamera, the board uses App Lab's own camera helper (OpenCV underneath);
+a laptop falls back to the `ffmpeg` command, if it is installed.
 """
 
 import base64
+import os
 import subprocess
 import time
+
+import config
+
+
+def test_photo_b64(name):
+    """One of the built-in test drawings as base64 PNG text."""
+    if name not in config.TEST_PHOTOS:
+        raise ValueError(f"unknown test photo {name!r} - pick one of {', '.join(config.TEST_PHOTOS)}")
+    with open(os.path.join(config.TEST_PHOTO_DIR, f"{name}.png"), "rb") as f:
+        return base64.b64encode(f.read()).decode()
 
 
 def grab_jpeg_b64(url, timeout_s=15):

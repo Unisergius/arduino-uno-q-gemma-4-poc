@@ -41,7 +41,7 @@ function logLine(e) {
       text = `Q: ${esc(e.question)}<br>A: ${esc(e.answer)}${mcuText(e.mcu)}`;
       break;
     case "see":
-      text = `Photo: <b>${esc(e.status)}</b> (${esc(e.confidence)}) – ${esc(e.issue)}`;
+      text = `Photo${e.test_photo ? ` (test drawing: ${esc(e.test_photo)})` : ""}: <b>${esc(e.status)}</b> (${esc(e.confidence)}) – ${esc(e.issue)}`;
       break;
     case "journal":
       text = `📓 ${esc(e.text)}`;
@@ -82,13 +82,61 @@ function render(s) {
     `scenario: ${g.scenario.replace("_", " ")}`, g.raining ? `🌧️ raining${tag(g.sources.rain)}` : "",
   ].filter(Boolean).map((c) => `<span class="chip">${c}</span>`).join("");
   if (s.raw_sensors && Object.keys(s.raw_sensors).length) $("raw").textContent = JSON.stringify(s.raw_sensors, null, 1);
-  $("camera-status").textContent = s.camera ? `reCamera: ${s.camera} – press the yellow button or "Check now".` : "No camera set (RECAMERA_URL in config.py).";
+  $("camera-status").textContent = s.camera
+    ? `reCamera: ${s.camera} – press the yellow button or "Check now".`
+    : "No camera: “Check now” and the yellow button show Gemma the test drawing picked here. Or take a real photo with your phone.";
+  renderTestPhotos(s);
+  renderBench(s.bench);
+  // "Dry zone" only works for a zone without a sensor: on a sensor zone, turn the knob or slider instead.
+  document.querySelectorAll("button[data-action]").forEach((button) => {
+    const action = JSON.parse(button.dataset.action);
+    if (action.type === "dry") button.hidden = g.sources.soil[action.zone] === "sensor";
+  });
 
   if (s.answer) $("answer").innerHTML = `<b>${esc(s.answer.answer)}</b>${mcuText(s.answer.mcu)}${timing(s.answer.llm)}`;
   if (s.photo) $("photo-result").innerHTML = `<b>${esc(s.photo.status)}</b> (${esc(s.photo.confidence)}): ${esc(s.photo.leaves)}${timing(s.photo.llm)}`;
   $("log").innerHTML = s.log.map(logLine).join("") || '<li class="muted">Nothing yet – Gemma looks at the garden every 2 simulated hours.</li>';
   if (s.last_prompt) $("prompt").textContent = s.last_prompt;
 }
+
+// The pretend camera: pick which built-in drawing it "sees".
+function renderTestPhotos(s) {
+  const box = $("test-photos");
+  box.hidden = Boolean(s.camera);
+  if (!box.children.length) {
+    box.innerHTML = s.test_photos.map((name) => `<button class="thumb" data-photo="${esc(name)}">
+      <img src="test-photos/${esc(name)}.png" alt="Test drawing: ${esc(name)} plants"><span>${esc(name)}</span></button>`).join("");
+  }
+  box.querySelectorAll(".thumb").forEach((b) => b.classList.toggle("selected", b.dataset.photo === s.test_photo));
+}
+$("test-photos").addEventListener("click", (event) => {
+  const thumb = event.target.closest(".thumb");
+  if (thumb) send({ type: "test_photo", value: thumb.dataset.photo });
+});
+
+// The laptop test bench: sliders start from the pretend sensors' values, then you move them.
+let benchReady = false;
+function renderBench(bench) {
+  $("bench").hidden = !bench;
+  if (!bench || benchReady) return;
+  document.querySelectorAll("#bench [data-bench]").forEach((input) => {
+    const value = bench[input.dataset.bench];
+    if (input.type === "checkbox") input.checked = value;
+    else input.value = value;
+    showSlider(input);
+  });
+  benchReady = true;
+}
+function showSlider(input) {
+  if (input.type === "range") input.parentElement.querySelector("output").textContent = input.value + input.dataset.unit;
+}
+document.querySelectorAll("#bench [data-bench]").forEach((input) => {
+  input.addEventListener("input", () => showSlider(input));
+  input.addEventListener("change", () => send({
+    type: "bench", name: input.dataset.bench, value: input.type === "checkbox" ? input.checked : Number(input.value),
+  }));
+});
+$("bench-button").addEventListener("click", () => send({ type: "button" }));
 
 async function refresh() {
   try {

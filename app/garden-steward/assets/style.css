@@ -72,3 +72,11 @@ input#question { flex: 1; min-width: 0; font: inherit; padding: 8px; border-radi
 .small { font-size: 0.85rem; color: var(--muted); }
 pre { white-space: pre-wrap; font-size: 0.85rem; }
 footer { padding-bottom: 24px; font-size: 0.85rem; }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin: 10px 0; }
+.slider input { grid-column: 1 / -1; width: 100%; }
+.toggle { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.thumbs[hidden], #bench[hidden] { display: none; }
+.thumb { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px; }
+.thumb img { display: block; width: 140px; max-width: 100%; height: auto; border-radius: 6px; }
+.thumb.selected { border-color: var(--green); box-shadow: 0 0 0 2px var(--green); }
