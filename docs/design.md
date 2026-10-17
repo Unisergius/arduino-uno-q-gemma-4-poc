@@ -7,7 +7,7 @@
 
 | Question | Answer | Consequence |
 |---|---|---|
-| Board | **UNO Q 4 GB** | Gemma 4 E2B (~1.5 GB peak RAM) fits on the board |
+| Board | **UNO Q 4 GB** | Gemma 4 E2B *should* fit, but the llama.cpp file is 3.35 GB (+0.99 GB vision); Phase 0 checks it |
 | Connectivity | **Never online** | No cloud and no Gemini API at runtime. Everything is local |
 | Where | **Garden** (outdoor) | Weatherproof box, water tank, real sensors (later) |
 | Power | **Solar + battery** | The power budget matters; measure it in Phase 0 |
@@ -91,7 +91,7 @@ so the model *cannot* produce broken JSON:
 
 ### Why Gemma 4 (and not a bigger cloud model)
 - **Offline:** open weights running on the board. No internet, no API key, no subscription.
-- **Small enough:** E2B fits in the 4 GB board's memory.
+- **Small enough (to be confirmed):** built for phones (~1.5 GB peak on a Raspberry Pi 5 with LiteRT‑LM). The llama.cpp file is 3.35 GB, so fitting the 4 GB board is Phase 0's first question. Smaller 2.4–2.5 GB versions exist.
 - **One model, many senses:** text, vision and audio in one model, so no separate image model is needed.
 - **Function calling:** made for "pick an action" tasks.
 - **Same family scales up:** the 26B/31B models are there if it ever goes online.
@@ -108,8 +108,8 @@ Enforced in the MCU sketch. The same rules apply in the simulation:
 | No watering if battery below | 20 % |
 | No watering if tank empty | float switch (real) / simulated flag |
 
-If Gemma suggests "water zone 1 for 10 minutes", the MCU runs 60 s at most and logs the refusal.
-The demo shows this on purpose.
+If Gemma (or the web page's **Force** button) asks for "water zone 1 for 10 minutes", the MCU caps it at 60 s.
+Asking again within 4 simulated hours is refused outright. The demo shows this on purpose.
 
 ## 5. The "Paper Garden" simulation (first demo)
 
@@ -189,8 +189,9 @@ converter, IP65 box with cable glands.
 | Unknown | Why it matters | Plan B |
 |---|---|---|
 | E2B speed on UNO Q (est. 2–4 tok/s) | sets how often Gemma can think | shorter prompts, or Gemma 3 1B for "Decide" |
-| E2B RAM with App Lab running | 4 GB shared with Debian + containers | run llama.cpp outside Docker, smaller quant |
-| Gemma 4 vision in llama.cpp | the "See" job | LiteRT‑LM, or drop vision from the POC |
+| E2B RAM with App Lab running | 3.35 GB model + 0.99 GB vision on 4 GB shared with Debian; App Lab's LLM container is capped at 2.5 GB | `VISION=0`, a 2.4–2.5 GB quantization, llama.cpp outside App Lab, or LiteRT‑LM |
+| Arduino lists Gemma 4 E2B only for the VENTUNO Q | App Lab's LLM brick may not serve it on the UNO Q | run `llama-server` ourselves (`LLM_BASE_URL`) |
+| Gemma 4 vision on the board | the "See" job (works in llama.cpp on a laptop: spots yellow/brown, not droopy shapes) | phone upload, or drop vision from the POC |
 | Board as Wi-Fi hotspot | phone and reCamera without internet | the reCamera's own hotspot, or LED matrix only |
 | Real power draw | solar sizing | bigger battery/panel |
 
@@ -202,3 +203,16 @@ converter, IP65 box with cable glands.
 | 1 – Paper Garden | simulated soil + real Gemma + MCU safety + web page | demo script runs end to end |
 | 2 – Real sensors | swap simulated soil/weather for real sensors | readings match reality |
 | 3 – Outdoors | solar, battery, box, water | 48 h unattended, offline |
+
+## 10. What the first test run showed (laptop, not the board yet)
+
+The real Gemma 4 E2B (`google/gemma-4-E2B-it-qat-q4_0-gguf`) in llama.cpp, with the real prompts:
+
+- **Decision time:** ~8 s at ~16 tok/s on a 4-core x86 machine. The UNO Q will be slower.
+- **Hidden thinking:** E2B started reasoning out loud in 6 of 12 replies even with thinking off. An empty
+  assistant prefill plus a zero reasoning budget fixed it (12 of 12).
+- **Numbers:** it misread "33 %" as "below 25 %". Python now labels each zone (VERY DRY / below target /
+  in target range) and adds rain to every zone's line. It then followed the rules in 13 of 14 checks.
+- **Vision:** it reliably flags yellow/brown drawings, not green drooping ones, so sick plants get coloured.
+
+The code is in [`app/garden-steward/`](../app/garden-steward/README.md) and the Phase 0 test in [`spike/`](../spike/README.md).

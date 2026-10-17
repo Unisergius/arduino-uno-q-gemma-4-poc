@@ -46,6 +46,7 @@ def summarise(history, now_h, now_dt, zones=config.ZONES):
         "pressure_change_3h": 0.0,
         "battery": latest["battery"],
         "tank_empty": latest["tank_empty"],
+        "raining": latest.get("raining", False),
     }
 
     old = history.value_hours_ago(3, now_h, lambda s: s["pressure_hpa"])
@@ -71,28 +72,45 @@ def summarise(history, now_h, now_dt, zones=config.ZONES):
 
 def describe(summary):
     """The summary as the short text that goes into Gemma's prompt."""
+    change = summary["pressure_change_3h"]
+    hint = " (rain likely)" if change <= -3 else ""
+    # Put the rain on every zone's line, so Gemma doesn't have to connect the dots.
+    rain = "; it is raining now" if summary.get("raining") else "; rain likely in the next hours" if hint else ""
     lines = [f"Time {summary['time']}."]
     for zone, z in summary["zones"].items():
         low, high = z["target"]
         watered = "never watered yet" if z["hours_since_watered"] is None else f"last watered {z['hours_since_watered']} h ago"
         lines.append(
-            f"Zone {zone} {z['plant']}: soil {z['moisture']} % (target {low}-{high} %), "
-            f"{_trend(z['trend_per_h'])}, {watered}."
+            f"Zone {zone} {z['plant']}: soil {z['moisture']} % = {_level(z['moisture'], low, high)} "
+            f"(target {low}-{high} %), {_trend(z['trend_per_h'])}, {watered}{rain}."
         )
-    change = summary["pressure_change_3h"]
-    hint = " (rain likely)" if change <= -3 else ""
     lines.append(
         f"Air {summary['temp_c']} °C, humidity {summary['humidity']} %, sunlight {summary['light']} %. "
         f"Pressure {summary['pressure_hpa']} hPa, {change:+} hPa in 3 h{hint}."
     )
+    if summary.get("raining"):
+        lines.append("It is raining right now.")
     tank = "EMPTY" if summary["tank_empty"] else "ok"
     lines.append(f"Battery {summary['battery']} %. Water tank {tank}.")
     return "\n".join(lines)
 
 
+def _level(moisture, low, high):
+    """Python compares the numbers; Gemma reads the words (small models misread numbers)."""
+    if moisture < config.URGENT_SOIL:
+        return "VERY DRY"
+    if moisture < low:
+        return "below target"
+    if moisture > high:
+        return "above target"
+    return "in target range"
+
+
 def _trend(per_h):
+    if per_h <= -3:
+        return f"falling fast {abs(per_h)} %/h"
     if per_h <= -0.5:
-        return f"falling {abs(per_h)} %/h"
+        return f"falling slowly {abs(per_h)} %/h"
     if per_h >= 0.5:
         return f"rising {per_h} %/h"
     return "stable"

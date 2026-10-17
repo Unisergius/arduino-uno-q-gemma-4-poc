@@ -41,7 +41,7 @@ class SafetyRules:
 
 
 class FakeMcu:
-    """Pretends to be the sketch. No sensors, an imaginary pump, a printed 'LED matrix'."""
+    """Pretends to be the sketch: no sensors (everything is simulated) and an imaginary pump."""
 
     def __init__(self, clock):
         self.clock = clock
@@ -51,7 +51,7 @@ class FakeMcu:
         self.icon = "ok"
 
     def read_sensors(self):
-        return {"thermo": False, "pressure": False}
+        return {}
 
     def set_sim_state(self, battery, tank_empty):
         self.battery, self.tank_empty = battery, tank_empty

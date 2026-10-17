@@ -1,7 +1,7 @@
 // Garden Steward web page: polls /api/state every 2 s and sends button presses to /api/action.
 
 const ICONS = { ok: "✅", think: "💭", water: "💧", alert: "⚠️" };
-const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", journal: "Gemma is writing the journal…" };
+const BUSY = { decide: "Gemma is deciding…", ask: "Gemma is answering…", photo: "Gemma is looking at the photo…", snap: "Taking a photo…", journal: "Gemma is writing the journal…" };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -50,7 +50,7 @@ function logLine(e) {
       text = `Forced: water zone ${e.zone} for ${e.seconds} s${mcuText(e.mcu)}`;
       break;
     default:
-      text = `Error in ${esc(e.job)}: ${esc(e.error)}`;
+      text = `Problem in ${esc(e.job)}: ${esc(e.error)}`;
   }
   if (e.error && e.kind === "decision") text += ` <span class="small">(${esc(e.error)})</span>`;
   return `<li><span class="small">${esc(e.time)}</span> ${badge}${text}${timing(e.llm)}</li>`;
@@ -71,19 +71,21 @@ function render(s) {
       <div><b>${esc(z.plant)}</b></div>
       <div class="value">${m.toFixed(0)} %</div>
       <div class="bar"><div class="target" style="left:${low}%;width:${high - low}%"></div><div class="fill" style="width:${m}%"></div></div>
-      <div class="small">target ${low}–${high} %</div>
+      <div class="small">target ${low}–${high} % · ${g.sources.soil[zone] === "sensor" ? (zone === "1" ? "knob" : "probe") + " + watering bonus" : "simulated"}</div>
     </div>`;
   }).join("");
 
-  const real = s.real_sensors && (s.real_sensors.thermo || s.real_sensors.pressure) ? " (real sensor)" : "";
+  const tag = (source) => (source === "sensor" ? " <b>(sensor)</b>" : "");
   $("weather").innerHTML = [
-    `🌡️ ${g.temp_c} °C${real}`, `💧 ${g.humidity} %`, `☀️ ${g.light} %`, `🧭 ${g.pressure_hpa} hPa`,
-    `🔋 ${g.battery} %`, g.tank_empty ? "🚱 tank empty" : "🚰 tank ok",
-    `scenario: ${g.scenario.replace("_", " ")}`, g.raining ? "🌧️ raining" : "",
+    `🌡️ ${g.temp_c} °C${tag(g.sources.temp)}`, `💧 ${g.humidity} %`, `☀️ ${g.light} %${tag(g.sources.light)}`,
+    `🧭 ${g.pressure_hpa} hPa`, `🔋 ${g.battery} %`, g.tank_empty ? "🚱 tank empty" : "🚰 tank ok",
+    `scenario: ${g.scenario.replace("_", " ")}`, g.raining ? `🌧️ raining${tag(g.sources.rain)}` : "",
   ].filter(Boolean).map((c) => `<span class="chip">${c}</span>`).join("");
+  if (s.raw_sensors && Object.keys(s.raw_sensors).length) $("raw").textContent = JSON.stringify(s.raw_sensors, null, 1);
+  $("camera-status").textContent = s.camera ? `reCamera: ${s.camera} – press the yellow button or "Check now".` : "No camera set (RECAMERA_URL in config.py).";
 
   if (s.answer) $("answer").innerHTML = `<b>${esc(s.answer.answer)}</b>${mcuText(s.answer.mcu)}${timing(s.answer.llm)}`;
-  if (s.photo) $("photo-result").innerHTML = `<b>${esc(s.photo.status)}</b> (${esc(s.photo.confidence)}): ${esc(s.photo.issue)}${timing(s.photo.llm)}`;
+  if (s.photo) $("photo-result").innerHTML = `<b>${esc(s.photo.status)}</b> (${esc(s.photo.confidence)}): ${esc(s.photo.leaves)}${timing(s.photo.llm)}`;
   $("log").innerHTML = s.log.map(logLine).join("") || '<li class="muted">Nothing yet – Gemma looks at the garden every 2 simulated hours.</li>';
   if (s.last_prompt) $("prompt").textContent = s.last_prompt;
 }

@@ -12,7 +12,9 @@ import time
 from collections import deque
 
 import brain
+import camera
 import config
+import sensors
 from simulation import PaperGarden, SimClock
 from stats import History, describe, summarise
 
@@ -33,7 +35,9 @@ class Steward:
         self.pump_until = 0.0
         self.answer = None
         self.photo = None
-        self.real = {}
+        self.raw = {}   # raw readings from the MCU (for calibrating)
+        self.real = {}  # the same, converted (see sensors.py); empty without sensors
+        self.last_button = None
         self.sent_state = None
         self.last_tick_h = self.clock.hours()
         self.last_decision_h = None
@@ -44,6 +48,8 @@ class Steward:
 
     def tick(self):
         now_h, now = self.clock.hours(), self.clock.now()
+        self.raw = self._mcu("read_sensors") or {}
+        self.real = sensors.convert(self.raw)
         with self.lock:
             hours = now_h - self.last_tick_h
             self.last_tick_h = now_h
@@ -57,9 +63,14 @@ class Steward:
         if state != self.sent_state:
             self._mcu("set_sim_state", *state)
             self.sent_state = state
-        if self.ticks % 5 == 0:
-            self.real = self._mcu("read_sensors") or {}
         self.ticks += 1
+
+        # The yellow button: take a photo, then decide.
+        presses = self.real.get("button")
+        if presses is not None and self.last_button is not None and presses > self.last_button:
+            self.check_now()
+        if presses is not None:
+            self.last_button = presses
 
         if self.busy is None and self.jobs.empty():
             since = None if self.last_decision_h is None else now_h - self.last_decision_h
@@ -90,7 +101,9 @@ class Steward:
 
     def _summary(self):
         with self.lock:
-            summary = summarise(self.history, self.clock.hours(), self.clock.now())
+            now_h, now = self.clock.hours(), self.clock.now()
+            self.history.add(now_h, self.garden.snapshot(now, self.real))  # fresh, not up to 1 s old
+            summary = summarise(self.history, now_h, now)
         return summary, describe(summary)
 
     def _job_decide(self, _):
@@ -124,13 +137,23 @@ class Steward:
                         seconds=reply["water_seconds"], mcu=outcome, llm=info)
         self._show("ok" if not outcome or outcome["ok"] else "alert")
 
+    def check_now(self):
+        self.last_decision_h = self.clock.hours()
+        self.jobs.put(("snap", None))
+        self.jobs.put(("decide", None))
+
+    def _job_snap(self, _):
+        """Grab a frame from the reCamera, then let Gemma look at it."""
+        self._show("think")
+        self._job_photo({"image_b64": camera.grab_jpeg_b64(config.RECAMERA_URL), "mime": "image/jpeg"})
+
     def _job_photo(self, payload):
         if self.llm is None:
             raise RuntimeError("Gemma is off")
         self._show("think")
         verdict, info = brain.check_photo(payload["image_b64"], self.llm, payload.get("mime", "image/jpeg"))
         self.photo = {**verdict, "llm": info}
-        self._write_log("see", status=verdict["status"], issue=verdict["issue"],
+        self._write_log("see", status=verdict["status"], issue=verdict["leaves"],
                         confidence=verdict["confidence"], llm=info)
         self._show("ok" if verdict["status"] == "healthy" else "alert")
 
@@ -205,7 +228,8 @@ class Steward:
             "busy": self.busy,
             "queued": self.jobs.qsize(),
             "gemma": "off" if self.llm is None else f"{self.llm.model} @ {self.llm.base_url}",
-            "real_sensors": self.real,
+            "raw_sensors": self.raw,
+            "camera": config.RECAMERA_URL or None,
             "answer": self.answer,
             "photo": self.photo,
             "log": [{k: v for k, v in e.items() if k != "prompt"} for e in reversed(self.log)][:40],
@@ -236,6 +260,8 @@ class Steward:
             self.jobs.put(("photo", {"image_b64": action["image_b64"], "mime": action.get("mime", "image/jpeg")}))
         elif kind == "journal":
             self.jobs.put(("journal", None))
+        elif kind == "check":  # same as the yellow button
+            self.check_now()
         elif kind == "water":  # the "try to overwater it" button: straight to the MCU, no Gemma
             outcome = self._act(int(action["zone"]), int(action["seconds"]))
             self._write_log("manual", zone=int(action["zone"]), seconds=int(action["seconds"]), mcu=outcome)

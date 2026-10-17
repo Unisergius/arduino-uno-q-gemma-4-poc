@@ -1,17 +1,28 @@
 // Garden Steward - microcontroller side (STM32U585).
 //
-// The MCU owns everything physical: sensors, the "pump" and the LED matrix.
-// It also enforces the SAFETY LIMITS. Gemma (on the Linux side) can only *ask*
-// to water; this sketch decides whether that is allowed. Keep the limits in sync
-// with python/config.py.
+// The MCU owns everything physical: sensors, the "pump" relay, the LEDs and the
+// LED matrix. It also enforces the SAFETY LIMITS. Gemma (on the Linux side) can
+// only *ask* to water; this sketch decides whether that is allowed.
+// Keep the limits in sync with python/config.py, and the pins with README.md.
 //
-// Paper Garden: no real pump. Pins 2 and 3 drive an LED or a relay module for
-// zones 1 and 2, a Modulino Opto Relay clicks if one is plugged in, and the
-// LED matrix shows water drops.
+// Paper Garden: no real water. The relay clicks, the blue LED and the matrix
+// show "watering", and Python adds a pretend watering bonus to the soil reading.
 
 #include <Arduino_RouterBridge.h>
 #include <Arduino_LED_Matrix.h>
-#include <Arduino_Modulino.h>
+
+// ---- Wiring: DFRobot Gravity kit (3.3 V logic! A0/A1 are not 5 V tolerant, D3 unused) ----
+const int PIN_KNOB = A0;     // Analog Rotation Sensor: zone 1 "soil dial"      (VCC 3.3 V)
+const int PIN_SOIL = A1;     // Soil Moisture Sensor SEN0114: zone 2 probe      (VCC 3.3 V)
+const int PIN_TEMP = A2;     // LM35 DFR0023: 10 mV/°C, only ~0.25 V out         (VCC 5 V ok)
+const int PIN_LIGHT = A3;    // Ambient Light Sensor                             (VCC 3.3 V)
+const int PIN_STEAM = A4;    // Steam Sensor: wet fingertip = "raining now"      (VCC 3.3 V)
+const int PIN_BUTTON = 2;    // yellow push button: "check now"                 (VCC 3.3 V)
+const int PIN_RELAY = 4;     // Relay Module DFR0017: the "pump"                 (VCC 5 V)
+const int PIN_LED_WATER = 5; // blue LED module (optional)
+const int PIN_LED_ALERT = 6; // red LED module (optional)
+const int BUTTON_PRESSED = HIGH;  // VERIFY: the Gravity button reads HIGH while pressed
+// VERIFY: the DFR0017 relay is powered from 5 V; check its input switches with the UNO Q's 3.3 V signal.
 
 // ---- Safety limits (same values as python/config.py) ----
 const int MAX_PUMP_S = 60;                 // longest single watering, seconds
@@ -23,21 +34,16 @@ const int BATTERY_FLOOR = 20;              // %, no watering below this
 // The intervals above are measured on this scaled clock. Use 1 for a real garden.
 const long TIME_SCALE = 60;
 
-const int ZONES = 2;
-const int PUMP_PIN[ZONES + 1] = {-1, 2, 3};  // index 0 unused; zone 1 -> pin 2, zone 2 -> pin 3
+const int ZONES = 2;  // one pump/relay; in a real garden each zone would get a valve
 
 Arduino_LED_Matrix matrix;
-ModulinoThermo thermo;
-ModulinoPressure barometer;
-ModulinoOptoRelay relay;
-bool hasThermo = false, hasPressure = false, hasRelay = false;
 
 // Simulated battery and tank, sent by Python. On a real garden these would be read
 // from a battery monitor and a float switch instead.
 int battery = 100;
 bool tankEmpty = false;
 
-// Watering history per zone (simulated minutes), newest last.
+// Watering history per zone (simulated minutes), oldest first.
 long history[ZONES + 1][MAX_PER_DAY];
 int historyCount[ZONES + 1] = {0};
 
@@ -45,6 +51,11 @@ int pumpZone = 0;                // 0 = pump off
 unsigned long pumpOffAt = 0;
 unsigned long lastAnim = 0;
 bool animFrame = false;
+
+// Button presses are counted here; Python notices when the count goes up.
+long buttonPresses = 0;
+bool buttonWasDown = false;
+unsigned long buttonChangedAt = 0;
 
 uint8_t frame[8 * 13];
 
@@ -67,25 +78,25 @@ void drawIcon(const String& name, bool alt = false) {
     for (int r = 3; r <= 5; r++) for (int c = 4; c <= 8; c++) px(r + o, c);
     for (int c = 5; c <= 7; c++) px(6 + o, c);
   } else if (name == "alert") {                // exclamation mark
-    for (int r = 0; r <= 4; r++) { px(r, 6); }
+    for (int r = 0; r <= 4; r++) px(r, 6);
     px(6, 6); px(7, 6);
   } else {                                     // "ok": a check mark
     px(1, 11); px(2, 10); px(3, 9); px(4, 8); px(5, 7); px(6, 6); px(7, 5);
     px(4, 2); px(5, 3); px(6, 4);
   }
   matrix.draw(frame);
+  digitalWrite(PIN_LED_ALERT, name == "alert" ? HIGH : LOW);
 }
 
 // ---------------------------------------------------------------- pump
 
-void pumpWrite(int zone, bool on) {
-  digitalWrite(PUMP_PIN[zone], on ? HIGH : LOW);
-  digitalWrite(LED_BUILTIN, on ? LOW : HIGH);   // built-in LED is on when LOW
-  if (hasRelay) { if (on) relay.on(); else relay.off(); }
+void pumpWrite(bool on) {
+  digitalWrite(PIN_RELAY, on ? HIGH : LOW);
+  digitalWrite(PIN_LED_WATER, on ? HIGH : LOW);
 }
 
 void stopPump() {
-  if (pumpZone) pumpWrite(pumpZone, false);
+  pumpWrite(false);
   pumpZone = 0;
   drawIcon("ok");
 }
@@ -128,24 +139,22 @@ String water(int zone, int seconds) {
 
   pumpZone = zone;
   pumpOffAt = millis() + (unsigned long)seconds * 1000UL;
-  pumpWrite(zone, true);
+  pumpWrite(true);
   drawIcon("water");
   return reply(true, zone, seconds, note);
 }
 
-// {"thermo":true,"temp_c":21.4,"humidity":48,"pressure":true,"pressure_hpa":1012.3,"pump_zone":0,"sim_min":123}
+// Raw readings; python/sensors.py turns them into %, °C and "raining".
+// {"a0":512,"a1":300,"a2":70,"a3":600,"a4":20,"button":3,"pump_zone":0,"sim_min":123}
 String read_sensors() {
-  String json = "{\"thermo\":" + String(hasThermo ? "true" : "false");
-  if (hasThermo) {
-    json += ",\"temp_c\":" + String(thermo.getTemperature(), 1);
-    json += ",\"humidity\":" + String(thermo.getHumidity(), 0);
-  }
-  json += ",\"pressure\":" + String(hasPressure ? "true" : "false");
-  if (hasPressure) {
-    json += ",\"pressure_hpa\":" + String(barometer.getPressure() * 10.0, 1);  // VERIFY: library returns kPa
-  }
-  json += ",\"pump_zone\":" + String(pumpZone) + ",\"sim_min\":" + String(simMinutes()) + "}";
-  return json;
+  return String("{\"a0\":") + analogRead(PIN_KNOB) +   // VERIFY: 10-bit (0-1023) by default
+         ",\"a1\":" + analogRead(PIN_SOIL) +
+         ",\"a2\":" + analogRead(PIN_TEMP) +
+         ",\"a3\":" + analogRead(PIN_LIGHT) +
+         ",\"a4\":" + analogRead(PIN_STEAM) +
+         ",\"button\":" + buttonPresses +
+         ",\"pump_zone\":" + pumpZone +
+         ",\"sim_min\":" + simMinutes() + "}";
 }
 
 bool set_sim_state(int newBattery, bool newTankEmpty) {
@@ -162,25 +171,18 @@ bool show(String icon) {
 // ---------------------------------------------------------------- setup / loop
 
 void setup() {
-  for (int z = 1; z <= ZONES; z++) {
-    pinMode(PUMP_PIN[z], OUTPUT);
-    digitalWrite(PUMP_PIN[z], LOW);
-  }
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);  // off
+  pinMode(PIN_BUTTON, INPUT);
+  pinMode(PIN_RELAY, OUTPUT);
+  pinMode(PIN_LED_WATER, OUTPUT);
+  pinMode(PIN_LED_ALERT, OUTPUT);
+  pumpWrite(false);
 
   matrix.begin();
   matrix.setGrayscaleBits(3);
   drawIcon("ok");
 
-  // Optional Modulino sensors on the Qwiic connector. Missing ones are simply skipped.
-  Modulino.begin();
-  hasThermo = thermo.begin();
-  hasPressure = barometer.begin();
-  hasRelay = relay.begin();
-
   Bridge.begin();
-  // provide_safe: these run in the main loop thread, so they can touch pins, I2C and the matrix.
+  // provide_safe: these run in the main loop thread, so they can safely touch pins and the matrix.
   Bridge.provide_safe("water", water);
   Bridge.provide_safe("read_sensors", read_sensors);
   Bridge.provide_safe("set_sim_state", set_sim_state);
@@ -189,10 +191,20 @@ void setup() {
 
 void loop() {
   // Never block here: Bridge calls are served between loop() runs.
-  if (pumpZone && (long)(millis() - pumpOffAt) >= 0) stopPump();
-  if (pumpZone && millis() - lastAnim > 400) {
-    lastAnim = millis();
+  unsigned long now = millis();
+
+  if (pumpZone && (long)(now - pumpOffAt) >= 0) stopPump();
+  if (pumpZone && now - lastAnim > 400) {
+    lastAnim = now;
     animFrame = !animFrame;
     drawIcon("water", animFrame);
+  }
+
+  // Count button presses (with 50 ms debounce).
+  bool down = digitalRead(PIN_BUTTON) == BUTTON_PRESSED;
+  if (down != buttonWasDown && now - buttonChangedAt > 50) {
+    buttonChangedAt = now;
+    buttonWasDown = down;
+    if (down) buttonPresses++;
   }
 }

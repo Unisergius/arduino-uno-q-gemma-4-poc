@@ -5,6 +5,7 @@ import pytest
 
 import brain
 import config
+import sensors
 from mcu import FakeMcu, SafetyRules
 from simulation import PaperGarden, SimClock
 from stats import History, describe, summarise
@@ -36,20 +37,42 @@ def test_clock_runs_sixty_times_faster():
     assert clock.now() == datetime(2026, 6, 1, 7, 0)
 
 
-def test_soil_dries_faster_in_a_heatwave():
+def test_simulated_soil_dries_faster_in_a_heatwave():
     noon = datetime(2026, 6, 1, 12, 0)
     normal, hot = PaperGarden(), PaperGarden()
     hot.set_scenario("heatwave", 0)
     normal.step(3, noon, 3)
     hot.step(3, noon, 3)
-    assert hot.moisture[1] < normal.moisture[1] < 50
+    assert hot.soil(1, {}) < normal.soil(1, {}) < 50
 
 
-def test_watering_raises_moisture():
+def test_watering_bonus_is_added_and_fades_over_six_hours():
     garden = PaperGarden()
     garden.dry_out(1)
     garden.water(1, 30)
-    assert garden.moisture[1] == pytest.approx(38.0)
+    knob = {"soil": {1: 20.0, 2: None}}
+    assert garden.soil(1, knob) == pytest.approx(20 + config.WATERING_BONUS)
+    night = datetime(2026, 6, 1, 23, 0)
+    garden.step(3, night, 3, knob)
+    assert garden.soil(1, knob) == pytest.approx(20 + config.WATERING_BONUS / 2)
+    garden.step(3, night, 6, knob)
+    assert garden.soil(1, knob) == pytest.approx(20.0)
+
+
+def test_real_readings_win_over_the_simulation():
+    garden = PaperGarden()
+    real = {"soil": {1: 12.0, 2: None}, "temp_c": 31.5, "light": 5.0, "raining": True}
+    snap = garden.snapshot(datetime(2026, 6, 1, 12, 0), real)
+    assert snap["moisture"] == {1: 12.0, 2: 50.0}
+    assert snap["temp_c"] == 31.5 and snap["light"] == 5.0 and snap["raining"]
+    assert snap["sources"]["soil"] == {1: "sensor", 2: "simulated"}
+    assert snap["sources"]["temp"] == "sensor"
+
+
+def test_rain_on_the_steam_sensor_waters_the_paper_garden():
+    garden = PaperGarden()
+    garden.step(2, datetime(2026, 6, 1, 12, 0), 2, {"soil": {1: 30.0, 2: 30.0}, "raining": True})
+    assert garden.soil(1, {"soil": {1: 30.0}}) == pytest.approx(30 + 2 * config.RAIN_BONUS_PER_H)
 
 
 def test_rain_coming_drops_pressure_then_rains():
@@ -59,12 +82,33 @@ def test_rain_coming_drops_pressure_then_rains():
     for h in range(1, 5):
         garden.step(1, at, h)
     assert garden.pressure < 1010
-    assert garden.raining
+    assert garden.raining({})
 
 
 def test_unknown_scenario_is_rejected():
     with pytest.raises(ValueError):
         PaperGarden().set_scenario("snow", 0)
+
+
+# --- sensors ----------------------------------------------------------------------------
+
+
+def test_raw_readings_become_percent_celsius_and_rain():
+    raw = {"a0": 512, "a1": 350, "a2": 78, "a3": 400, "a4": 600, "button": 2}
+    real = sensors.convert(raw)
+    assert real["soil"] == {1: pytest.approx(50.0, abs=0.1), 2: 50.0}
+    assert real["temp_c"] == pytest.approx(25.2, abs=0.1)  # 78 / 1023 * 3.3 V * 100
+    assert real["light"] == 50.0
+    assert real["raining"] is True
+    assert real["button"] == 2
+
+
+def test_implausible_temperature_and_unconnected_sensors_are_ignored():
+    raw = {"a0": 512, "a1": 350, "a2": 1000, "a3": 400, "a4": 0}
+    real = sensors.convert(raw, connected={"knob", "temp"})
+    assert real["temp_c"] is None  # 322 °C: unplugged or noise
+    assert real["soil"][2] is None and real["light"] is None and real["raining"] is None
+    assert sensors.convert({}) == {}
 
 
 # --- stats ----------------------------------------------------------------------------
@@ -88,11 +132,21 @@ def test_summary_trend_and_pressure_change():
     assert s["pressure_change_3h"] == pytest.approx(-4.0)
 
 
+def test_describe_does_the_comparisons_for_gemma():
+    history = history_with([(0, 20.0, 1015.0), (3, 20.0, 1015.0)])
+    history.add(3, {"moisture": {1: 20.0, 2: 80.0}, "temp_c": 20, "humidity": 50, "light": 50,
+                    "pressure_hpa": 1015.0, "battery": 78, "tank_empty": False, "raining": True})
+    text = describe(summarise(history, 3, datetime(2026, 6, 1, 7, 10)))
+    assert "soil 20.0 % = VERY DRY" in text and "soil 80.0 % = above target" in text
+    assert text.count("it is raining now") == 2
+
+
 def test_describe_mentions_everything_gemma_needs():
     history = history_with([(0, 40.0, 1010.0), (3, 31.0, 1006.0)])
     text = describe(summarise(history, 3, datetime(2026, 6, 1, 7, 10)))
     assert "Time 07:10." in text
-    assert "Zone 1 tomatoes: soil 31.0 % (target 35-60 %), falling 3.0 %/h, never watered yet." in text
+    assert ("Zone 1 tomatoes: soil 31.0 % = below target (target 35-60 %), falling fast 3.0 %/h, "
+            "never watered yet; rain likely in the next hours.") in text
     assert "-4.0 hPa in 3 h (rain likely)" in text
     assert "Battery 78 %. Water tank ok." in text
 
@@ -205,7 +259,7 @@ def test_decision_waters_through_the_mcu_and_logs_the_reason(tmp_path):
     assert kind == "decide"
     steward._job_decide(payload)
 
-    assert steward.garden.moisture[1] == pytest.approx(38.0)
+    assert steward.garden.soil(1, {}) == pytest.approx(20 + config.WATERING_BONUS)
     first = steward.log[0]
     assert first["source"] == "gemma" and first["mcu"]["ok"] and first["reason"] == "Tomatoes are dry."
     assert "Zone 1 tomatoes: soil 20.0 %" in llm.prompts[0][1]
@@ -276,6 +330,62 @@ def test_decisions_are_scheduled_every_two_sim_hours(tmp_path):
     fake.t = 120  # +2 h: due
     steward.tick()
     assert steward.jobs.get_nowait()[0] == "decide"
+
+
+class SensorMcu(FakeMcu):
+    """FakeMcu with a knob, a probe and a button."""
+
+    def __init__(self, clock):
+        super().__init__(clock)
+        self.raw = {"a0": 1023, "a1": 700, "a2": 70, "a3": 800, "a4": 0, "button": 0}
+
+    def read_sensors(self):
+        return dict(self.raw)
+
+
+def test_decision_sees_a_button_press_made_just_before(tmp_path):
+    reply = {"decisions": [{"zone": 1, "reason": "dry", "action": "water", "seconds": 30},
+                           {"zone": 2, "reason": "ok", "action": "wait", "seconds": 0}]}
+    steward, llm, _ = steward_with(reply, tmp_path)
+    steward.tick()
+    steward.handle({"type": "dry", "zone": 1})  # no tick in between
+    steward._job_decide(None)
+    assert "Zone 1 tomatoes: soil 20.0 % = VERY DRY" in llm.prompts[0][1]
+
+
+def test_yellow_button_takes_a_photo_and_decides(tmp_path):
+    clock, _ = make_clock()
+    mcu = SensorMcu(clock)
+    steward = Steward(mcu, StubLlm({}), clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    steward.tick()
+    while not steward.jobs.empty():
+        steward.jobs.get_nowait()  # drop the first scheduled decision
+    mcu.raw["button"] = 1
+    steward.tick()
+    assert [steward.jobs.get_nowait()[0] for _ in range(2)] == ["snap", "decide"]
+
+
+def test_knob_turned_to_dry_reaches_gemma(tmp_path):
+    clock, _ = make_clock()
+    mcu = SensorMcu(clock)
+    reply = {"decisions": [{"zone": 1, "reason": "dry", "action": "water", "seconds": 30},
+                           {"zone": 2, "reason": "ok", "action": "wait", "seconds": 0}]}
+    llm = StubLlm(reply)
+    steward = Steward(mcu, llm, clock=clock, log_path=str(tmp_path / "log.jsonl"))
+    mcu.raw["a0"] = 100  # knob almost fully "dry"
+    steward.tick()
+    steward._job_decide(None)
+    assert "Zone 1 tomatoes: soil 9.8 %" in llm.prompts[0][1]
+    assert steward.garden.soil(1, steward.real) == pytest.approx(9.8 + config.WATERING_BONUS)
+
+
+def test_snap_without_camera_is_logged_and_does_not_crash(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "RECAMERA_URL", "")
+    steward, _, _ = steward_with({}, tmp_path)
+    steward.jobs.put(("snap", None))
+    kind, payload = steward.jobs.get_nowait()
+    with pytest.raises(RuntimeError, match="no camera configured"):
+        getattr(steward, f"_job_{kind}")(payload)
 
 
 def test_state_is_json_ready(tmp_path):

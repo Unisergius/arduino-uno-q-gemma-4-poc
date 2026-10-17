@@ -1,7 +1,8 @@
-"""The pretend garden: a fast clock, the weather scenarios and the soil model.
+"""The pretend parts of the garden: a fast clock, the weather scenarios and the soil.
 
-Only this file is fake. Everything that reads from it (stats, Gemma, the MCU
-safety rules, the log) is the same code a real garden would use.
+Real sensor readings win whenever they exist (knob, soil probe, LM35, light, steam).
+Everything missing is simulated, so the same code runs on a laptop with no sensors.
+No real water flows, so an accepted watering adds a "watering bonus" that fades away.
 """
 
 import math
@@ -31,16 +32,15 @@ class SimClock:
 
 
 class PaperGarden:
-    """Two zones of soil that dry with heat and sun and get wetter when watered."""
-
     def __init__(self, zones=config.ZONES):
-        self.moisture = {zone: 50.0 for zone in zones}
+        self.base = {zone: 50.0 for zone in zones}   # simulated soil, used when a zone has no sensor
+        self.bonus = {zone: 0.0 for zone in zones}   # pretend water from waterings and rain
         self.scenario = "normal"
         self.scenario_since_h = 0.0
-        self.pressure = 1015.0
-        self.battery = 80.0
+        self.pressure = 1015.0                       # always simulated: the "forecast"
+        self.battery = 80.0                          # always simulated
         self.tank_empty = False
-        self.raining = False
+        self.sim_raining = False
 
     # --- buttons on the web page ---------------------------------------------------
 
@@ -49,18 +49,16 @@ class PaperGarden:
             raise ValueError(f"unknown scenario {name!r}")
         self.scenario = name
         self.scenario_since_h = now_h
-        self.raining = False
+        self.sim_raining = False
 
     def dry_out(self, zone):
-        self.moisture[zone] = 20.0
+        """Only affects a zone without a sensor - on the board, turn the knob instead."""
+        self.base[zone] = 20.0
+        self.bonus[zone] = 0.0
 
-    # --- physics (very rough, good enough for a demo) ----------------------------
+    # --- readings: real when available, simulated otherwise ------------------------
 
-    def weather(self, at, real=None):
-        """Temperature, humidity and light for this moment.
-
-        If a real sensor is plugged in and the scenario is "normal", its readings win.
-        """
+    def weather(self, at, real):
         hour = at.hour + at.minute / 60
         daylight = max(0.0, math.sin(math.pi * (hour - 6) / 14)) if 6 <= hour <= 20 else 0.0
         temp = 14 + 10 * daylight
@@ -72,54 +70,72 @@ class PaperGarden:
             temp -= 3
             humidity += 15
             daylight *= 0.5
-        weather = {"temp_c": round(temp, 1), "humidity": round(humidity), "light": round(100 * daylight)}
-        if real and self.scenario == "normal":
-            for key in ("temp_c", "humidity"):
-                if real.get(key) is not None:
-                    weather[key] = real[key]
-        return weather
+        return {
+            "temp_c": real.get("temp_c") if real.get("temp_c") is not None else round(temp, 1),
+            "humidity": round(humidity),  # no humidity sensor in the kit: always simulated
+            "light": real.get("light") if real.get("light") is not None else round(100 * daylight),
+        }
+
+    def raining(self, real):
+        return bool(real.get("raining")) or self.sim_raining
+
+    def soil(self, zone, real):
+        sensor = real.get("soil", {}).get(zone)
+        base = sensor if sensor is not None else self.base[zone]
+        return min(100.0, base + self.bonus[zone])
+
+    # --- physics (very rough, good enough for a demo) ----------------------------
 
     def step(self, hours, at, now_h, real=None):
         """Move the garden forward by `hours` of simulated time."""
+        real = real or {}
         w = self.weather(at, real)
 
-        # Pressure falls before rain, otherwise drifts back to normal.
+        # Pressure falls before rain, otherwise drifts back to normal. Rain starts 4 h after "Rain coming".
         if self.scenario == "rain_coming":
             self.pressure -= 1.5 * hours
-            self.raining = now_h - self.scenario_since_h >= 4
+            self.sim_raining = now_h - self.scenario_since_h >= 4
         else:
             self.pressure += (1015.0 - self.pressure) * min(1.0, 0.3 * hours)
-        if real and real.get("pressure_hpa") and self.scenario == "normal":
-            self.pressure = real["pressure_hpa"]
 
-        dry_per_hour = 0.8 + 0.08 * max(0.0, w["temp_c"] - 20) + 0.01 * w["light"]
-        if self.scenario == "heatwave":
-            dry_per_hour *= 2.5
-        for zone in self.moisture:
-            change = -dry_per_hour * hours
-            if self.raining:
-                change += 6 * hours
-            self.moisture[zone] = min(100.0, max(0.0, self.moisture[zone] + change))
+        hot = 2.5 if self.scenario == "heatwave" or w["temp_c"] >= 30 else 1.0
+        dry_per_hour = (0.8 + 0.08 * max(0.0, w["temp_c"] - 20) + 0.01 * w["light"]) * hot
+        fade_per_hour = config.WATERING_BONUS / config.BONUS_FADE_H * hot
+        raining = self.raining(real)
+        for zone in self.base:
+            self.base[zone] = max(0.0, self.base[zone] - dry_per_hour * hours)
+            if raining:
+                self.bonus[zone] = min(100.0, self.bonus[zone] + config.RAIN_BONUS_PER_H * hours)
+            else:
+                self.bonus[zone] = max(0.0, self.bonus[zone] - fade_per_hour * hours)
 
         # Solar battery: charges in the sun, drains at night.
         self.battery += (3 * w["light"] / 100 - 1) * hours
         self.battery = min(100.0, max(0.0, self.battery))
-        return w
 
     def water(self, zone, seconds):
-        """The (pretend) pump ran for `seconds`: about +0.6 % moisture per second."""
-        self.moisture[zone] = min(100.0, self.moisture[zone] + 0.6 * seconds)
+        """The MCU accepted a watering: a 30 s drink is worth WATERING_BONUS points."""
+        self.bonus[zone] = min(100.0, self.bonus[zone] + config.WATERING_BONUS * seconds / 30)
 
     def snapshot(self, at, real=None):
+        real = real or {}
         w = self.weather(at, real)
+        soil = real.get("soil", {})
         return {
-            "moisture": {zone: round(m, 1) for zone, m in self.moisture.items()},
+            "moisture": {zone: round(self.soil(zone, real), 1) for zone in self.base},
             "temp_c": w["temp_c"],
             "humidity": w["humidity"],
             "light": w["light"],
             "pressure_hpa": round(self.pressure, 1),
             "battery": round(self.battery),
             "tank_empty": self.tank_empty,
-            "raining": self.raining,
+            "raining": self.raining(real),
             "scenario": self.scenario,
+            # what is real and what is pretend - shown on the web page
+            "sources": {
+                "soil": {zone: "sensor" if soil.get(zone) is not None else "simulated" for zone in self.base},
+                "temp": "sensor" if real.get("temp_c") is not None else "simulated",
+                "light": "sensor" if real.get("light") is not None else "simulated",
+                "rain": "sensor" if real.get("raining") is not None else "simulated",
+            },
         }

@@ -18,21 +18,24 @@ Every few hours you get a short report. For EACH zone choose one action:
 - water: run the pump. 20-40 seconds is a normal drink; 60 seconds is the most it can do.
 - wait: do nothing for now.
 - alert: something needs a human; say what in the reason.
-Rules of thumb:
-- Keep the soil inside the target range. Water when it is below or about to drop below it.
-- Never water a zone that is inside or above its range and not falling fast.
-- If rain is likely (pressure down 3 hPa or more in 3 hours), wait and let the rain water the garden,
-  unless the soil is more than 10 points below its target range.
-- If the water tank is empty or the battery is very low, use alert instead of water.
+Rules, using the words in the report:
+- VERY DRY or below target: water.
+- in target range: wait, unless it is falling fast.
+- above target: wait.
+- If a zone says it is raining now or rain is likely: wait and say so - unless it is VERY DRY.
+- If the water tank is EMPTY or the battery is under 20 %: alert instead of water.
 Write the reason first: one plain sentence, at most 20 words."""
 
 ASK_PROMPT = """You are the Garden Steward, the brain of a small off-grid garden.
 Answer the gardener in 1-3 short, friendly sentences, using the report and the recent log.
-Only if the gardener asks you to water, set water_zone and water_seconds; otherwise set both to 0."""
+Only if the gardener asks you to water, set water_zone and water_seconds; otherwise set both to 0.
+Never mention water_zone or water_seconds in the answer."""
 
-SEE_PROMPT = """This is a photo of the plants in the garden. They may be drawings on paper - judge them as if real.
-Green, upright leaves mean healthy. Drooping leaves mean thirsty. Yellow, brown or spotted leaves mean sick.
-Describe the main issue in at most 15 words."""
+SEE_PROMPT = """This is a photo of the plants in the garden. They may be simple drawings on paper:
+judge only colour and shape, never the amount of detail.
+First describe the leaves: their colours and whether they stand up or hang down.
+Then judge: green, upright leaves = healthy. Hanging or drooping leaves = thirsty.
+Yellow, brown or spotted leaves = sick."""
 
 JOURNAL_PROMPT = """You are the Garden Steward. Write today's garden journal entry in 2-3 short sentences
 for the gardener: what the weather did, what you watered or skipped, and why."""
@@ -77,11 +80,11 @@ def ask_schema(zones=config.ZONES):
 SEE_SCHEMA = {
     "type": "object",
     "properties": {
+        "leaves": {"type": "string", "maxLength": 120},  # describe first, then judge
         "status": {"type": "string", "enum": ["healthy", "thirsty", "sick", "unknown"]},
-        "issue": {"type": "string", "maxLength": 120},
         "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     },
-    "required": ["status", "issue", "confidence"],
+    "required": ["leaves", "status", "confidence"],
 }
 
 
@@ -93,7 +96,7 @@ class LlmClient:
         self.model = model
         self.timeout = timeout
 
-    def chat(self, system, user, schema=None, max_tokens=200, image_b64=None, image_mime="image/jpeg"):
+    def chat(self, system, user, schema=None, max_tokens=200, image_b64=None, image_mime="image/jpeg", temperature=0.2):
         """Return (text, info). `info` has timing numbers for the log and the web page."""
         content = user
         if image_b64:
@@ -112,7 +115,7 @@ class LlmClient:
                 # replies thought with both; 6 of 12 did without the budget.)
                 {"role": "assistant", "content": ""},
             ],
-            "temperature": 0.2,
+            "temperature": temperature,
             "max_tokens": max_tokens,
             "reasoning_budget_tokens": 0,
         }
@@ -183,7 +186,7 @@ def validate(answer, zones=config.ZONES):
 def decide(summary, summary_text, llm, zones=config.ZONES):
     """Ask Gemma what to do. Falls back to the simple rule for anything Gemma gets wrong."""
     try:
-        text, info = llm.chat(DECIDE_PROMPT, summary_text, schema=decision_schema(zones), max_tokens=220)
+        text, info = llm.chat(DECIDE_PROMPT, summary_text, schema=decision_schema(zones), max_tokens=220, temperature=0)
         decisions = validate(json.loads(text), zones)
     except Exception as error:  # timeout, server down, bad JSON...
         return {"decisions": fallback(summary), "source": "fallback", "llm": None, "error": str(error)}
@@ -201,7 +204,7 @@ def decide(summary, summary_text, llm, zones=config.ZONES):
 
 def check_photo(image_b64, llm, image_mime="image/jpeg"):
     text, info = llm.chat(SEE_PROMPT, "How do these plants look?", schema=SEE_SCHEMA,
-                          max_tokens=80, image_b64=image_b64, image_mime=image_mime)
+                          max_tokens=80, image_b64=image_b64, image_mime=image_mime, temperature=0)
     return json.loads(text), info
 
 
